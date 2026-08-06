@@ -1,0 +1,140 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit README.Rmd and then run devtools::build_readme(). -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# restaurabee
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+## Overview
+
+**restaurabee** is an R package for prioritizing plant species for ecological
+restoration using plant–pollinator interaction networks.
+
+The package provides a reproducible workflow that integrates interaction
+abundance, occurrence frequency, network connectivity, and species
+specialization to identify plant species with the greatest potential to support
+the restoration of pollination interactions.
+
+## Main features
+
+- Validate plant–pollinator interaction datasets.
+- Build quantitative interaction matrices.
+- Calculate the **Interaction Importance Index (IIP)**.
+- Estimate species specialization (**d'**).
+- Calculate the **Interaction-based Restoration Priority Index (IPR)**.
+- Select priority species based on cumulative restoration priority.
+- Perform sensitivity analyses under alternative weighting schemes.
+- Calculate ecological network metrics using the **bipartite** package.
+
+## Installation
+
+The development version can be installed from GitHub using:
+
+```r
+# install.packages("remotes")
+remotes::install_github("YOUR_GITHUB_USERNAME/restaurabee")
+```
+
+## Example
+
+```{r example}
+library(restaurabee)
+
+interaction_data <- data.frame(
+  plant_species = c(
+    "Plant_A",
+    "Plant_A",
+    "Plant_B",
+    "Plant_C"
+  ),
+  bee_species = c(
+    "Bee_1",
+    "Bee_2",
+    "Bee_1",
+    "Bee_3"
+  ),
+  sample_unit = c(
+    "S1",
+    "S1",
+    "S2",
+    "S3"
+  )
+)
+
+result <- restaurabee(interaction_data)
+```
+
+### Interaction Importance Index (IIP)
+
+```{r}
+result$IIP
+```
+
+### Restoration prioritization (IPR)
+
+```{r}
+result$prioritization
+```
+
+### Selected priority species
+
+```{r}
+result$selected_species
+```
+
+### Sensitivity analysis
+
+```{r}
+result$sensitivity$correlation_matrix
+```
+
+## Workflow
+
+```
+Interaction data
+        │
+        ▼
+check_data()
+        │
+        ▼
+build_interaction_matrix()
+        │
+        ├──────────────► Network metrics
+        │
+        ▼
+calculate_IIP()
+        │
+        ▼
+calculate_d_prime()
+        │
+        ▼
+calculate_IPR()
+        │
+        ▼
+select_species()
+        │
+        ▼
+sensitivity_analysis()
+```
+
+## Citation
+
+If you use **restaurabee** in your research, please cite the package and the
+corresponding methodological publication (to be added).
+
+## License
+
+MIT License. 

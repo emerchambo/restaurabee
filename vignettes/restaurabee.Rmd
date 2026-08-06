@@ -1,0 +1,154 @@
+---
+title: "Getting Started with restaurabee"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with restaurabee}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(restaurabee)
+```
+
+# Introduction
+
+**restaurabee** is an R package for prioritizing plant species for ecological
+restoration using plant-pollinator interaction networks.
+
+The package provides a reproducible workflow to calculate ecological
+importance, species specialization, restoration priority scores, selected
+priority species, sensitivity analyses, and network-level descriptors.
+
+# Input data
+
+The input data must be a data frame with at least three columns:
+
+- `plant_species`: plant species identifier;
+- `bee_species`: bee species identifier;
+- `sample_unit`: sampling unit identifier.
+
+Example:
+
+```{r input-data}
+interaction_data <- data.frame(
+  plant_species = c(
+    "Plant_A", "Plant_A", "Plant_B", "Plant_C",
+    "Plant_C", "Plant_D", "Plant_D", "Plant_E"
+  ),
+  bee_species = c(
+    "Bee_1", "Bee_2", "Bee_1", "Bee_2",
+    "Bee_3", "Bee_1", "Bee_3", "Bee_2"
+  ),
+  sample_unit = c(
+    "S1", "S1", "S2", "S2",
+    "S3", "S3", "S4", "S4"
+  )
+)
+
+interaction_data
+```
+
+# Running the workflow
+
+The complete workflow can be run with a single function:
+
+```{r run-workflow}
+result <- restaurabee(interaction_data)
+```
+
+The output is a list containing the interaction matrix, ecological metrics,
+prioritization results, selected species, sensitivity analysis, and network
+metrics.
+
+```{r output-names}
+names(result)
+```
+
+# Interaction matrix
+
+The interaction matrix contains plant species in rows, bee species in columns,
+and the total number of observed interactions as cell values.
+
+```{r interaction-matrix}
+result$interaction_matrix
+```
+
+# Interaction Importance Index
+
+The Interaction Importance Index (IIP) summarizes the ecological importance of
+each plant species based on relative interaction abundance, occurrence
+frequency, and connectivity.
+
+```{r iip}
+result$IIP
+```
+
+# Species specialization
+
+Species specialization is calculated using the d' index from the **bipartite**
+package. Values close to 0 indicate generalist species, whereas values close to
+1 indicate more specialized species.
+
+```{r d-prime}
+result$d_prime$plant_dprime
+```
+
+# Restoration prioritization
+
+The Interaction-based Restoration Priority Index (IPR) integrates standardized
+interaction abundance, occurrence frequency, connectivity, and species
+specialization quantified by the d' index.
+
+By default, all four components receive equal weights. Higher standardized d'
+values increase the IPR score, thereby assigning greater restoration priority
+to plant species with more specialized interaction patterns when the remaining
+components are held constant.
+
+```{r prioritization}
+result$prioritization
+```
+
+# Selecting priority species
+
+Priority species are selected according to their cumulative contribution to the
+total IPR. By default, the function selects the minimum set of species required
+to reach at least 80% of the cumulative restoration priority.
+
+```{r selected-species}
+result$selected_species
+```
+
+# Sensitivity analysis
+
+The sensitivity analysis evaluates the robustness of species ranking under
+alternative weighting schemes that emphasize interaction abundance, species
+specialization, connectivity, or occurrence frequency.
+
+```{r sensitivity}
+result$sensitivity$correlation_matrix
+```
+
+# Network-level metrics
+
+Network-level descriptors are computed using the **bipartite** package.
+
+```{r network-metrics}
+result$network_metrics
+```
+
+# References
+
+Blüthgen, N., Menzel, F., & Blüthgen, N. (2006). Measuring specialization in
+species interaction networks. *BMC Ecology*, 6, 9.
+
+Dormann, C. F., Gruber, B., & Fründ, J. (2008). Introducing the bipartite
+package: analysing ecological networks. *R News*, 8(2), 8–11.
+ 
