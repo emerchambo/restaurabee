@@ -45,7 +45,7 @@ The development version can be installed from GitHub using:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("YOUR_GITHUB_USERNAME/restaurabee")
+remotes::install_github("emerchambo/restaurabee")
 ```
 
 ## Example
