@@ -21,35 +21,114 @@ library(restaurabee)
 # Introduction
 
 **restaurabee** is an R package for prioritizing plant species for ecological
-restoration using plant-pollinator interaction networks.
+restoration using plant–pollinator interaction networks.
 
 The package provides a reproducible workflow to calculate ecological
-importance, species specialization, restoration priority scores, selected
+importance, plant species specialization, restoration priority scores, selected
 priority species, sensitivity analyses, and network-level descriptors.
+
+The results are intended to support restoration planning. They should be
+considered alongside ecological feasibility, species origin, establishment
+requirements, and other restoration criteria.
 
 # Input data
 
-The input data must be a data frame with at least three columns:
+The input must be a data frame in long format, with one row per recorded
+plant–pollinator interaction and at least three columns:
 
-- `plant_species`: plant species identifier;
-- `bee_species`: bee species identifier;
-- `sample_unit`: sampling unit identifier.
+- `plant_species`: a consistent and unambiguous plant species identifier;
+- `bee_species`: a consistent and unambiguous bee species identifier;
+- `sample_unit`: a unique identifier for the sampling unit in which the
+  interaction was recorded.
 
-Example:
+Each row represents one interaction record. Therefore, repeated combinations
+of plant species, bee species, and sampling unit must be retained when they
+represent separate observations, because they contribute to interaction
+abundance.
+
+Missing or empty values in the three required columns should be checked before
+the analysis.
+
+## Sampling-unit identifiers
+
+The `sample_unit` column must uniquely identify sampling units across the
+complete dataset. A subplot number alone may not be sufficient when the same
+number is reused among sampling dates, sites, transects, or plots.
+
+In these cases, a composite identifier should be created:
+
+```{r composite-id, eval = FALSE}
+interaction_data$sample_unit <- paste(
+  interaction_data$date,
+  interaction_data$site,
+  interaction_data$transect,
+  interaction_data$plot,
+  interaction_data$subplot,
+  sep = "_"
+)
+```
+
+Different interaction records obtained in the same sampling unit must receive
+the same `sample_unit` identifier.
+
+## Taxonomic identifiers
+
+The same taxon must always be represented by the same identifier, and different
+taxa must not share ambiguous abbreviations. Full scientific names or other
+unambiguous identifiers are recommended.
+
+Leading and trailing spaces, hidden characters, and terminal punctuation should
+be removed before analysis. For example:
+
+```{r clean-identifiers, eval = FALSE}
+clean_identifier <- function(x) {
+  x <- as.character(x)
+  x <- gsub("\u00A0", " ", x, fixed = TRUE)
+  x <- trimws(x)
+  x <- gsub("[,;]+$", "", x)
+  x <- gsub("\\s+", " ", x, perl = TRUE)
+  x
+}
+
+interaction_data$plant_species <- clean_identifier(
+  interaction_data$plant_species
+)
+
+interaction_data$bee_species <- clean_identifier(
+  interaction_data$bee_species
+)
+```
+
+# Example data
+
+The following example represents repeated plant–pollinator interactions
+recorded across ten sampling units:
 
 ```{r input-data}
 interaction_data <- data.frame(
   plant_species = c(
-    "Plant_A", "Plant_A", "Plant_B", "Plant_C",
-    "Plant_C", "Plant_D", "Plant_D", "Plant_E"
+    "Plant_A", "Plant_A", "Plant_A", "Plant_A", "Plant_A",
+    "Plant_B", "Plant_B", "Plant_B",
+    "Plant_C", "Plant_C", "Plant_C", "Plant_C", "Plant_C",
+    "Plant_D", "Plant_D", "Plant_D", "Plant_D",
+    "Plant_E", "Plant_E", "Plant_E", "Plant_E",
+    "Plant_F", "Plant_F"
   ),
   bee_species = c(
-    "Bee_1", "Bee_2", "Bee_1", "Bee_2",
-    "Bee_3", "Bee_1", "Bee_3", "Bee_2"
+    "Bee_1", "Bee_1", "Bee_2", "Bee_2", "Bee_3",
+    "Bee_1", "Bee_1", "Bee_2",
+    "Bee_2", "Bee_2", "Bee_2", "Bee_3", "Bee_4",
+    "Bee_3", "Bee_4", "Bee_4", "Bee_5",
+    "Bee_1", "Bee_4", "Bee_5", "Bee_5",
+    "Bee_2", "Bee_5"
   ),
   sample_unit = c(
-    "S1", "S1", "S2", "S2",
-    "S3", "S3", "S4", "S4"
+    "S1", "S2", "S2", "S3", "S4",
+    "S1", "S5", "S5",
+    "S2", "S3", "S6", "S6", "S7",
+    "S4", "S7", "S8", "S8",
+    "S5", "S9", "S9", "S10",
+    "S6", "S10"
   )
 )
 
@@ -64,18 +143,30 @@ The complete workflow can be run with a single function:
 result <- restaurabee(interaction_data)
 ```
 
-The output is a list containing the interaction matrix, ecological metrics,
-prioritization results, selected species, sensitivity analysis, and network
-metrics.
+The output is a list containing metadata, the interaction matrix, plant-level
+ecological metrics, prioritization results, selected species, sensitivity
+analysis, and network-level metrics:
 
 ```{r output-names}
 names(result)
 ```
 
+# Dataset metadata
+
+The metadata summarize the number of interaction records, plant species, bee
+species, and sampling units used in the analysis:
+
+```{r metadata}
+result$metadata
+```
+
+These values should be checked against the expected dimensions of the input
+dataset before interpreting the results.
+
 # Interaction matrix
 
-The interaction matrix contains plant species in rows, bee species in columns,
-and the total number of observed interactions as cell values.
+The quantitative interaction matrix contains plant species in rows, bee species
+in columns, and the total number of recorded interactions as cell values:
 
 ```{r interaction-matrix}
 result$interaction_matrix
@@ -87,62 +178,126 @@ The Interaction Importance Index (IIP) summarizes the ecological importance of
 each plant species based on relative interaction abundance, occurrence
 frequency, and connectivity.
 
+The output includes:
+
+- `visits`: number of interaction records involving the plant;
+- `occurrences`: number of sampling units in which the plant was recorded;
+- `partners`: number of interacting bee species;
+- `abundance_relative`: relative interaction abundance;
+- `frequency_relative`: relative occurrence frequency;
+- `connectivity_relative`: relative network connectivity;
+- `IIP`: resulting Interaction Importance Index.
+
 ```{r iip}
 result$IIP
 ```
 
 # Species specialization
 
-Species specialization is calculated using the d' index from the **bipartite**
-package. Values close to 0 indicate generalist species, whereas values close to
-1 indicate more specialized species.
+Plant species specialization is calculated using the `d'` index from the
+**bipartite** package. Values close to 0 indicate more generalized interaction
+patterns, whereas values close to 1 indicate more specialized interaction
+patterns.
 
 ```{r d-prime}
 result$d_prime$plant_dprime
 ```
 
+The interpretation of `d'` depends on the interaction frequencies and resource
+availability represented in the observed network.
+
 # Restoration prioritization
 
 The Interaction-based Restoration Priority Index (IPR) integrates standardized
-interaction abundance, occurrence frequency, connectivity, and species
-specialization quantified by the d' index.
+interaction abundance, occurrence frequency, connectivity, and plant species
+specialization quantified by `d'`.
 
-By default, all four components receive equal weights. Higher standardized d'
+By default, all four components receive equal weights. Higher standardized `d'`
 values increase the IPR score, thereby assigning greater restoration priority
-to plant species with more specialized interaction patterns when the remaining
+to plants with more specialized interaction patterns when the remaining
 components are held constant.
 
 ```{r prioritization}
 result$prioritization
 ```
 
+The IPR is a relative prioritization score and should not be interpreted as an
+absolute measure of restoration success.
+
+Rare or infrequently recorded plant species may receive high priority when they
+show highly specialized interaction patterns. This is an expected consequence
+of including `d'` in the IPR and should be evaluated in the ecological context
+of the study.
+
 # Selecting priority species
 
 Priority species are selected according to their cumulative contribution to the
-total IPR. By default, the function selects the minimum set of species required
-to reach at least 80% of the cumulative restoration priority.
+total IPR.
+
+By default, the function selects the minimum set of species required to reach
+at least 80% of the cumulative restoration priority:
 
 ```{r selected-species}
 result$selected_species
 ```
 
+The selection threshold can influence the number of retained species and should
+be chosen according to the objectives and constraints of the restoration
+project.
+
 # Sensitivity analysis
 
-The sensitivity analysis evaluates the robustness of species ranking under
-alternative weighting schemes that emphasize interaction abundance, species
-specialization, connectivity, or occurrence frequency.
+The sensitivity analysis evaluates the robustness of the species ranking under
+alternative weighting schemes that emphasize interaction abundance, plant
+species specialization, connectivity, or occurrence frequency:
 
 ```{r sensitivity}
 result$sensitivity$correlation_matrix
 ```
 
+High rank correlations indicate that the prioritization is relatively stable
+under the tested changes in component weights. Lower correlations indicate
+greater sensitivity to the weighting scheme.
+
 # Network-level metrics
 
-Network-level descriptors are computed using the **bipartite** package.
+Network-level descriptors are computed using the **bipartite** package:
 
 ```{r network-metrics}
 result$network_metrics
 ```
+
+Some metrics may be undefined or unstable for very small, sparse, or
+disconnected networks.
+
+For example:
+
+- compartment diversity may be `NA` when the network contains only one
+  compartment;
+- Fisher's alpha may return a warning or an extremely high value when all
+  species are singletons;
+- metrics calculated from few species or interactions should be interpreted
+  cautiously.
+
+Such values should be examined in relation to network size, sampling effort,
+and data structure before biological interpretation.
+
+# Interpretation and limitations
+
+The results describe the interaction dataset supplied by the user. They depend
+on:
+
+- sampling effort;
+- taxonomic resolution;
+- spatial and temporal coverage;
+- consistency of sampling-unit identifiers;
+- accuracy and standardization of taxonomic names;
+- representation of rare interactions.
+
+The package provides a reproducible and explicit procedure for supporting
+restoration decisions. It does not replace ecological knowledge, field
+validation, assessments of restoration feasibility, or consideration of
+additional criteria not represented in the interaction network.
 
 # References
 
@@ -151,4 +306,3 @@ species interaction networks. *BMC Ecology*, 6, 9.
 
 Dormann, C. F., Gruber, B., & Fründ, J. (2008). Introducing the bipartite
 package: analysing ecological networks. *R News*, 8(2), 8–11.
- 

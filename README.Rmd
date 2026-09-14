@@ -33,7 +33,7 @@ the restoration of pollination interactions.
 - Validate plant–pollinator interaction datasets.
 - Build quantitative interaction matrices.
 - Calculate the **Interaction Importance Index (IIP)**.
-- Estimate species specialization (**d'**).
+- Estimate plant species specialization (**d'**).
 - Calculate the **Interaction-based Restoration Priority Index (IPR)**.
 - Select priority species based on cumulative restoration priority.
 - Perform sensitivity analyses under alternative weighting schemes.
@@ -48,6 +48,37 @@ The development version can be installed from GitHub using:
 remotes::install_github("emerchambo/restaurabee")
 ```
 
+## Input data
+
+The input must be a data frame in long format, with one row per recorded
+plant–pollinator interaction and three required columns:
+
+- `plant_species`: a consistent and unambiguous plant species identifier;
+- `bee_species`: a consistent and unambiguous bee species identifier;
+- `sample_unit`: a unique identifier for the sampling unit in which the
+  interaction was recorded.
+
+Repeated rows must not be removed when they represent separate interaction
+records because they contribute to interaction abundance.
+
+If subplot numbers are repeated among dates, sites, transects, or plots,
+`sample_unit` should be constructed as a composite identifier. For example:
+
+```r
+interaction_data$sample_unit <- paste(
+  interaction_data$date,
+  interaction_data$site,
+  interaction_data$transect,
+  interaction_data$plot,
+  interaction_data$subplot,
+  sep = "_"
+)
+```
+
+Species identifiers should not contain leading or trailing spaces, hidden
+characters, or terminal punctuation. Full scientific names or other
+unambiguous identifiers are recommended.
+
 ## Example
 
 ```{r example}
@@ -55,22 +86,28 @@ library(restaurabee)
 
 interaction_data <- data.frame(
   plant_species = c(
-    "Plant_A",
-    "Plant_A",
-    "Plant_B",
-    "Plant_C"
+    "Plant_A", "Plant_A", "Plant_A", "Plant_A", "Plant_A",
+    "Plant_B", "Plant_B", "Plant_B",
+    "Plant_C", "Plant_C", "Plant_C", "Plant_C", "Plant_C",
+    "Plant_D", "Plant_D", "Plant_D", "Plant_D",
+    "Plant_E", "Plant_E", "Plant_E", "Plant_E",
+    "Plant_F", "Plant_F"
   ),
   bee_species = c(
-    "Bee_1",
-    "Bee_2",
-    "Bee_1",
-    "Bee_3"
+    "Bee_1", "Bee_1", "Bee_2", "Bee_2", "Bee_3",
+    "Bee_1", "Bee_1", "Bee_2",
+    "Bee_2", "Bee_2", "Bee_2", "Bee_3", "Bee_4",
+    "Bee_3", "Bee_4", "Bee_4", "Bee_5",
+    "Bee_1", "Bee_4", "Bee_5", "Bee_5",
+    "Bee_2", "Bee_5"
   ),
   sample_unit = c(
-    "S1",
-    "S1",
-    "S2",
-    "S3"
+    "S1", "S2", "S2", "S3", "S4",
+    "S1", "S5", "S5",
+    "S2", "S3", "S6", "S6", "S7",
+    "S4", "S7", "S8", "S8",
+    "S5", "S9", "S9", "S10",
+    "S6", "S10"
   )
 )
 
@@ -103,11 +140,14 @@ result$sensitivity$correlation_matrix
 
 ## Workflow
 
-```
+The complete workflow is run with `restaurabee()`, which coordinates the
+following steps:
+
+```text
 Interaction data
         │
         ▼
-check_data()
+Data validation
         │
         ▼
 build_interaction_matrix()
@@ -130,11 +170,29 @@ select_species()
 sensitivity_analysis()
 ```
 
+The individual calculation functions are also exported for users who need
+greater control over the workflow.
+
+## Interpretation
+
+The IPR is a relative prioritization score and should not be interpreted as an
+absolute measure of restoration success. Results depend on sampling effort,
+taxonomic resolution, spatial and temporal coverage, and data quality.
+
+The prioritization should be considered alongside ecological feasibility,
+species origin, establishment requirements, and other restoration criteria.
+
 ## Citation
 
-If you use **restaurabee** in your research, please cite the package and the
-corresponding methodological publication (to be added).
+If you use **restaurabee** in your research, please cite the package:
+
+```r
+citation("restaurabee")
+```
+
+A citation for the corresponding methodological publication will be added when
+it becomes available.
 
 ## License
 
-MIT License. 
+MIT License.
