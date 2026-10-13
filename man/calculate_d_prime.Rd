@@ -7,21 +7,31 @@
 calculate_d_prime(interaction_matrix)
 }
 \arguments{
-\item{interaction_matrix}{A quantitative interaction matrix with plant
-species in rows and bee species in columns.}
+\item{interaction_matrix}{A numeric matrix with plants in rows and bees
+in columns. Values must be finite and non-negative. Rows and columns
+must have unique, non-empty species identifiers.}
 }
 \value{
 A list containing:
 \itemize{
-\item \code{plant_dprime}: data frame with plant species and their d' values.
-\item \code{bee_dprime}: data frame with bee species and their d' values.
+\item \code{plant_dprime}: data frame with plant identifiers and d' values.
+\item \code{bee_dprime}: data frame with bee identifiers and d' values.
 }
 }
 \description{
 Calculates the species-level specialization index d' for plant and bee
-species based on a quantitative plant-pollinator interaction matrix.
+species from a quantitative plant-pollinator interaction matrix.
 }
 \details{
 The index is computed using the \code{specieslevel()} function from the
 \code{bipartite} package.
+
+This function requires at least two plant species and two bee species,
+with at least one interaction recorded for every species.
+
+Specialization is calculated relative to the partner interaction totals
+in the supplied matrix. Independent partner abundances are not used.
+
+Missing or non-finite d' values stop the calculation and identify the
+affected species.
 }
