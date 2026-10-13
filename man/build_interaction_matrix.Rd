@@ -7,23 +7,24 @@
 build_interaction_matrix(interaction_data)
 }
 \arguments{
-\item{interaction_data}{A data frame containing at least the columns
+\item{interaction_data}{A data frame containing the columns
 \code{plant_species} and \code{bee_species}.}
 }
 \value{
-A quantitative interaction matrix with plant species in rows,
-bee species in columns, and interaction frequencies as values.
+A numeric matrix with plant identifiers as row names and bee
+identifiers as column names.
 }
 \description{
-Converts a plant-pollinator interaction dataset into a quantitative
-bipartite interaction matrix suitable for ecological network analyses.
+Counts the interaction records for each plant-bee pair.
 }
 \details{
-The resulting matrix contains plant species as rows, bee species as
-columns, and the total number of observed interactions between each
-plant-bee pair as cell values, regardless of sampling unit.
+Plants are represented in rows and bees in columns. Each cell contains
+the number of recorded interactions, pooled across sampling units.
+Pairs without records receive zero.
 
-This quantitative interaction matrix serves as the basis for calculating
-species specialization, network-level metrics, and other ecological
-descriptors throughout the restaurabee workflow.
+Each row represents one interaction record. Repeated records are
+counted separately. Additional columns are ignored.
+
+Numeric and factor identifiers are converted to character. Missing,
+empty identifiers and extra whitespace are rejected.
 }
