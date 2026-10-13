@@ -7,44 +7,60 @@
 calculate_IIP(interaction_data)
 }
 \arguments{
-\item{interaction_data}{A data frame containing at least the columns
-\code{plant_species}, \code{bee_species}, and \code{sample_unit}.}
+\item{interaction_data}{A data frame containing the columns
+\code{plant_species}, \code{bee_species} and \code{sample_unit}.}
 }
 \value{
-A data frame containing:
+A data frame ordered by decreasing IIP, containing:
 \itemize{
-\item \code{plant_species}: plant species name.
-\item \code{visits}: total number of recorded interactions.
-\item \code{occurrences}: number of sampling units where the species occurred.
-\item \code{partners}: number of interacting bee species.
-\item \code{abundance_relative}: relative interaction abundance.
-\item \code{frequency_relative}: relative occurrence frequency.
-\item \code{connectivity_relative}: relative number of pollinator partners.
-\item \code{IIP}: Interaction Importance Index.
+\item \code{plant_species}: plant species identifier.
+\item \code{visits}: number of interaction records.
+\item \code{occurrences}: number of distinct sampling units with
+interaction records for the plant.
+\item \code{partners}: number of distinct bee species recorded
+with the plant.
+\item \code{abundance_relative}: visits divided by total visits.
+\item \code{frequency_relative}: occurrences divided by the sum
+of occurrences across plants.
+\item \code{connectivity_relative}: partners divided by the sum
+of partner counts across plants.
+\item \code{IIP}: mean of the three relative components.
 }
 }
 \description{
-Calculates the Interaction Importance Index (IIP) for plant species based on
-three components derived from plant-pollinator interaction data: relative
-interaction abundance, relative occurrence frequency, and relative
-connectivity.
+Calculates the Interaction Importance Index (IIP) for plant species
+from relative interaction abundance, occurrence frequency and connectivity.
 }
 \details{
-The IIP is calculated as the mean of three relative components:
+The IIP is the mean of these three components:
 
 \deqn{
-IIP_i =
-\frac{
+IIP_i = \frac{1}{3}
 \left(
-\frac{V_i}{\sum V_i} +
-\frac{O_i}{\sum O_i} +
-\frac{P_i}{\sum P_i}
+\frac{V_i}{\sum_{j=1}^{n} V_j} +
+\frac{O_i}{\sum_{j=1}^{n} O_j} +
+\frac{P_i}{\sum_{j=1}^{n} P_j}
 \right)
-}{3}
 }
 
-where \eqn{V_i} is the total number of recorded interactions for plant
-species \eqn{i}, \eqn{O_i} is the number of sampling units in which plant
-species \eqn{i} occurred, and \eqn{P_i} is the number of bee species
-interacting with plant species \eqn{i}.
+where \eqn{V_i} is the number of interaction records for plant species
+\eqn{i}, \eqn{O_i} is the number of distinct sampling units with
+interaction records for that plant, \eqn{P_i} is the number of distinct
+bee species recorded with it, and \eqn{n} is the number of plant species
+in the dataset.
+
+Each row represents one interaction record and contributes to visits.
+For each plant species, occurrences counts distinct sampling units,
+while partners counts distinct bee species.
+
+A sampling unit can contribute to the occurrence count of several
+plants. Similarly, a bee species can contribute to the partner count
+of several plants. The denominators therefore sum the counts for
+each plant, rather than counting unique units or bees in the dataset.
+
+Occurrence indicates where interactions were recorded; it does not
+measure plant presence independently. Sampling-unit identifiers must
+distinguish units across sites and dates when appropriate.
+
+Each relative component sums to one across plants, as does the IIP.
 }
