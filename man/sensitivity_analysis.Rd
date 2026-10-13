@@ -8,25 +8,38 @@ sensitivity_analysis(prioritization)
 }
 \arguments{
 \item{prioritization}{A data frame produced by \code{calculate_IPR()},
-containing the standardized variables \code{abundance_pad},
-\code{d_prime_pad}, \code{connectivity_pad}, and
-\code{frequency_pad}.}
+containing the numeric columns \code{abundance_pad},
+\code{d_prime_pad}, \code{connectivity_pad} and \code{frequency_pad}.
+Values must be finite and between zero and one.}
 }
 \value{
 A list containing:
 \itemize{
-\item \code{correlation_matrix}: Spearman correlation matrix between
-ranking orders under different weighting scenarios.
-\item \code{results_table}: data frame containing the IPR values and
-ranks obtained under each weighting scenario.
+\item \code{correlation_matrix}: Spearman correlations between
+rankings under the five scenarios.
+\item \code{results_table}: original columns with the scores and
+ranks calculated for each scenario.
 }
 }
 \description{
-Evaluates the robustness of species ranking in the Interaction-based
-Restoration Priority Index (IPR) under different weighting schemes.
+Compares IPR rankings under five weighting schemes using Spearman
+rank correlations.
 }
 \details{
-The analysis compares the default equal-weight scenario with alternative
-scenarios that emphasize interaction abundance, species specialization,
-connectivity, or occurrence frequency.
+The reference scenario assigns 0.25 to each component. Four alternative
+scenarios assign 0.40 to one component and 0.20 to each of the others.
+
+Larger scores receive smaller rank numbers. Equal scores receive
+the same rank, using \code{dplyr::min_rank()}.
+
+If all species receive the same score in a scenario, its ranking
+is constant and its correlations are undefined. These entries are
+returned as \code{NA}, with a warning identifying the scenario.
+
+High correlations indicate similar rankings under the tested weights.
+They do not measure sampling uncertainty or guarantee that the same
+species will be selected at a cumulative threshold.
+
+These scenarios always use the fixed weights described above,
+regardless of the weights used to calculate the supplied IPR.
 }
