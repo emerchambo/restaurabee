@@ -4,29 +4,36 @@
 \alias{check_data}
 \title{Validate interaction data}
 \usage{
-check_data(interaction_data)
+check_data(interaction_data, clean_names = FALSE)
 }
 \arguments{
 \item{interaction_data}{A data frame containing plant-pollinator
 interaction records.}
+
+\item{clean_names}{Logical. If FALSE (default), identifiers with extra
+whitespace are rejected. If TRUE, whitespace is standardized and a
+warning reports changes and merged identifiers.}
 }
 \value{
-The original data frame if all validation checks are passed.
+The input data frame with the required identifier columns
+converted to character. All records and additional columns are retained.
 }
 \description{
-Checks whether the input dataset contains the minimum required columns
-for the restaurabee workflow and whether the input object is a data frame.
+Checks the required columns and identifiers used by restaurabee.
 }
 \details{
-The function verifies whether the input object is a data frame and whether
-it contains the following required columns:
+The required columns are:
 \itemize{
 \item \code{plant_species}: plant species identifier.
 \item \code{bee_species}: bee species identifier.
 \item \code{sample_unit}: sampling unit identifier.
 }
 
-An error is returned if the input is not a data frame, if one or more
-required columns are missing, or if the dataset has no rows.
+Missing and empty identifiers are rejected. Character values, factors
+and finite numeric codes are accepted.
+
+Optional cleaning replaces non-breaking spaces, removes leading and
+trailing whitespace, and collapses repeated whitespace. Punctuation
+and letter case are preserved. Repeated interaction records are retained.
 }
 \keyword{internal}
