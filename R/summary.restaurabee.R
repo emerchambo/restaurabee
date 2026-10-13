@@ -8,6 +8,9 @@
 #'
 #' @return The input object, invisibly.
 #'
+#' @details
+#' If selection failed, the output reports that selection is unavailable.
+#'
 #' @export
 summary.restaurabee <- function(object, ...) {
 
@@ -68,10 +71,17 @@ summary.restaurabee <- function(object, ...) {
   cat("Selected species\n")
   cat("-----------------------------------------\n")
 
-  print(
-    object$selected_species$plant_species,
-    quote = FALSE
-  )
+  if (is.null(object$selected_species)) {
+
+    cat("Selection not available: the selection step failed.\n")
+
+  } else {
+
+    print(
+      object$selected_species$plant_species,
+      quote = FALSE
+    )
+  }
 
   cat("\n")
 

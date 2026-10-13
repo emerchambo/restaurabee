@@ -29,8 +29,8 @@
 #'   \item \code{d_prime}: species specialization (d') for plants and bees.
 #'   \item \code{plant_metrics}: merged ecological metrics per plant species.
 #'   \item \code{prioritization}: Interaction-based Restoration Priority Index.
-#'   \item \code{selected_species}: subset of priority species based on
-#'   cumulative IPR.
+#'   \item \code{selected_species}: plants selected by cumulative IPR,
+#'   or \code{NULL} if selection fails. A warning explains the failure.
 #'   \item \code{sensitivity}: sensitivity analysis of ranking stability.
 #'   \item \code{network_metrics}: network-level descriptors computed with
 #'   \code{bipartite}.
@@ -101,8 +101,13 @@ restaurabee <- function(interaction_data) {
   selected_species <- tryCatch(
     select_species(prioritization),
     error = function(e) {
-      warning("Species selection failed: ", e$message)
-      prioritization
+      warning(
+        "Species selection failed: ",
+        conditionMessage(e),
+        call. = FALSE
+      )
+
+      NULL
     }
   )
 

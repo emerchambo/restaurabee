@@ -18,3 +18,6 @@ The input object, invisibly.
 Displays a detailed summary of the results produced by
 \code{restaurabee()}.
 }
+\details{
+If selection failed, the output reports that selection is unavailable.
+}

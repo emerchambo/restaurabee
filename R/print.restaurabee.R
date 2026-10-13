@@ -8,6 +8,9 @@
 #'
 #' @return The input object \code{x}, invisibly.
 #'
+#' @details
+#' If selection failed, the output reports that selection is unavailable.
+#'
 #' @export
 print.restaurabee <- function(x, ...) {
 
@@ -48,10 +51,17 @@ print.restaurabee <- function(x, ...) {
 
   cat("\n")
 
-  cat(sprintf(
-    "Selected species (80%% threshold): %d\n",
-    nrow(x$selected_species)
-  ))
+  if (is.null(x$selected_species)) {
+
+    cat("Selected species: not available (selection failed).\n")
+
+  } else {
+
+    cat(sprintf(
+      "Selected species (80%% threshold): %d\n",
+      nrow(x$selected_species)
+    ))
+  }
 
   if (!is.null(x$network_metrics)) {
 
