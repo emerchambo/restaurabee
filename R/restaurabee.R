@@ -1,17 +1,11 @@
 #' Ecological Restoration Prioritization Using Plant-Pollinator Networks
 #'
-#' Runs the complete restoration prioritization workflow based on
-#' plant-pollinator interaction networks.
+#' Runs the restoration prioritization workflow from plant-pollinator
+#' interaction records.
 #'
-#' The workflow calculates species importance through the Interaction
-#' Importance Index (IIP), species specialization (d'), restoration
-#' priority scores (IPR), sensitivity analyses, and network-level
-#' descriptors.
-#'
-#' The IPR integrates standardized ecological components, including
-#' interaction abundance, occurrence frequency, connectivity, and species
-#' specialization quantified by the d' index, allowing the identification
-#' of plant species with the highest restoration priority.
+#' Calculates the Interaction Importance Index (IIP), species
+#' specialization (d'), restoration priority scores (IPR),
+#' species selection, sensitivity analysis and network descriptors.
 #'
 #' @param interaction_data A data frame containing:
 #' \describe{
@@ -19,22 +13,37 @@
 #'   \item{bee_species}{Bee species identifier.}
 #'   \item{sample_unit}{Sampling unit identifier.}
 #' }
+#' @param network_indices Character vector of indices passed to
+#' \code{bipartite::networklevel()}. By default, calculates connectance,
+#' H2, weighted NODF, linkage density and web asymmetry.
+#' Use \code{"ALLBUTDD"} for the broader set provided by bipartite,
+#' or \code{NULL} to skip network metrics.
+#' @param seed Optional non-negative integer seed for network metrics.
+#' The previous random-number state is restored afterwards.
 #'
 #' @return An object of class \code{restaurabee} containing:
 #' \itemize{
-#'   \item \code{metadata}: summary of observations, plant species,
-#'   bee species, and sampling units.
-#'   \item \code{interaction_matrix}: plant-pollinator interaction matrix.
+#'   \item \code{metadata}: numbers of records, plants, bees and sampling units.
+#'   \item \code{interaction_matrix}: plant-by-bee interaction matrix.
 #'   \item \code{IIP}: Interaction Importance Index results.
-#'   \item \code{d_prime}: species specialization (d') for plants and bees.
-#'   \item \code{plant_metrics}: merged ecological metrics per plant species.
-#'   \item \code{prioritization}: Interaction-based Restoration Priority Index.
+#'   \item \code{d_prime}: specialization values for plants and bees.
+#'   \item \code{plant_metrics}: ecological metrics for each plant.
+#'   \item \code{prioritization}: IPR scores and standardized components.
 #'   \item \code{selected_species}: plants selected by cumulative IPR,
-#'   or \code{NULL} if selection fails. A warning explains the failure.
-#'   \item \code{sensitivity}: sensitivity analysis of ranking stability.
-#'   \item \code{network_metrics}: network-level descriptors computed with
-#'   \code{bipartite}.
+#'   or \code{NULL} if selection fails.
+#'   \item \code{sensitivity}: comparisons among weighting scenarios.
+#'   \item \code{network_metrics}: requested network descriptors, or
+#'   \code{NULL} if skipped or if their calculation fails.
 #' }
+#'
+#' @details
+#' Some additional network indices use random simulations. Supply a seed
+#' when requesting these indices to reproduce results in the same
+#' software environment.
+#'
+#' Changing network indices does not change IIP, d', IPR or species
+#' selection. Additional metrics are available in \code{network_metrics},
+#' even when they are not displayed by \code{print()} or \code{summary()}.
 #'
 #' @examples
 #' data <- data.frame(
@@ -44,9 +53,64 @@
 #' )
 #'
 #' result <- restaurabee(data)
+#' result_without_metrics <- restaurabee(data, network_indices = NULL)
 #'
 #' @export
-restaurabee <- function(interaction_data) {
+restaurabee <- function(
+    interaction_data,
+    network_indices = c(
+      "connectance",
+      "H2",
+      "weighted NODF",
+      "linkage density",
+      "web asymmetry"
+    ),
+    seed = NULL
+) {
+
+  if (!is.null(network_indices)) {
+
+    if (
+      !is.character(network_indices) ||
+      !is.null(dim(network_indices)) ||
+      length(network_indices) == 0L ||
+      anyNA(network_indices) ||
+      any(trimws(network_indices) == "")
+    ) {
+      stop(
+        "`network_indices` must be a non-empty character vector or NULL.",
+        call. = FALSE
+      )
+    }
+
+    network_indices <- unique(network_indices)
+  }
+
+  if (!is.null(seed)) {
+
+    if (
+      !is.numeric(seed) ||
+      length(seed) != 1L ||
+      !is.null(dim(seed)) ||
+      !is.finite(seed)
+    ) {
+      stop(
+        "`seed` must be a non-negative integer or NULL.",
+        call. = FALSE
+      )
+    }
+
+    if (
+      seed < 0 ||
+      seed > .Machine$integer.max ||
+      seed != floor(seed)
+    ) {
+      stop(
+        "`seed` must be a non-negative integer or NULL.",
+        call. = FALSE
+      )
+    }
+  }
 
   interaction_data <- check_data(interaction_data)
 
@@ -111,13 +175,75 @@ restaurabee <- function(interaction_data) {
     }
   )
 
-  network_metrics <- tryCatch(
-    bipartite::networklevel(interaction_matrix),
-    error = function(e) {
-      warning("Network-level metrics failed: ", e$message)
-      NULL
+  calculate_network_metrics <- function() {
+
+    if (!is.null(seed)) {
+
+      had_seed <- exists(
+        ".Random.seed",
+        envir = globalenv(),
+        inherits = FALSE
+      )
+
+      if (had_seed) {
+
+        previous_seed <- get(
+          ".Random.seed",
+          envir = globalenv(),
+          inherits = FALSE
+        )
+
+        on.exit(
+          assign(
+            ".Random.seed",
+            previous_seed,
+            envir = globalenv()
+          ),
+          add = TRUE
+        )
+
+      } else {
+
+        on.exit(
+          {
+            if (exists(
+              ".Random.seed",
+              envir = globalenv(),
+              inherits = FALSE
+            )) {
+              rm(".Random.seed", envir = globalenv())
+            }
+          },
+          add = TRUE
+        )
+      }
+
+      set.seed(as.integer(seed))
     }
-  )
+
+    bipartite::networklevel(
+      interaction_matrix,
+      index = network_indices
+    )
+  }
+
+  network_metrics <- NULL
+
+  if (!is.null(network_indices)) {
+
+    network_metrics <- tryCatch(
+      calculate_network_metrics(),
+      error = function(e) {
+        warning(
+          "Network-level metrics failed: ",
+          conditionMessage(e),
+          call. = FALSE
+        )
+
+        NULL
+      }
+    )
+  }
 
   result <- list(
     metadata = metadata,
