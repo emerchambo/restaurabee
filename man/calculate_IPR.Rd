@@ -13,19 +13,16 @@ calculate_IPR(
 )
 }
 \arguments{
-\item{plant_metrics}{A data frame containing the columns:
-\itemize{
-\item \code{abundance_relative}
-\item \code{frequency_relative}
-\item \code{connectivity_relative}
-\item \code{d_prime}
-}}
+\item{plant_metrics}{A data frame containing the numeric columns
+\code{abundance_relative}, \code{frequency_relative},
+\code{connectivity_relative} and \code{d_prime}.
+Values must be finite and between zero and one.}
 
 \item{weight_abundance}{Weight assigned to interaction abundance
 (default = 0.25).}
 
-\item{weight_specialization}{Weight assigned to species specialization
-(d') (default = 0.25).}
+\item{weight_specialization}{Weight assigned to specialization
+(default = 0.25).}
 
 \item{weight_connectivity}{Weight assigned to connectivity
 (default = 0.25).}
@@ -34,56 +31,39 @@ calculate_IPR(
 (default = 0.25).}
 }
 \value{
-A data frame containing standardized ecological metrics and the
-final IPR score, ordered from highest to lowest restoration priority.
+A data frame containing the original columns, standardized
+components and IPR, ordered from highest to lowest IPR.
 }
 \description{
-Computes the Interaction-based Restoration Priority Index (IPR) for plant
-species by integrating standardized ecological metrics derived from
-plant-pollinator interaction networks.
+Calculates restoration priority scores from interaction abundance,
+occurrence frequency, connectivity and species specialization.
 }
 \details{
-The IPR combines four ecological components:
-\itemize{
-\item Relative interaction abundance;
-\item Relative occurrence frequency;
-\item Relative connectivity (number of pollinator partners);
-\item Species specialization, represented by the d' index.
-}
+Each component is standardized using min-max scaling. By default,
+the four components receive equal weights.
 
-By default, all four components receive equal weights, although users may
-specify alternative weighting schemes according to their ecological
-hypotheses, restoration objectives, or management priorities.
-
-All ecological metrics are standardized using min-max scaling:
+Components are standardized as:
 
 \deqn{
-x_{pad} = \frac{x - min(x)}{max(x) - min(x)}
+x_{pad} = \frac{x - \min(x)}{\max(x) - \min(x)}
 }
 
-Species specialization is represented by the standardized d' index:
+When a component has the same value for every plant, its standardized
+values are set to zero. Its weight is not redistributed.
+
+The IPR is calculated as:
 
 \deqn{
-D_i = d'_{pad,i}
+IPR_i = w_A A_i + w_D D_i + w_C C_i + w_F F_i
 }
 
-The final Interaction-based Restoration Priority Index is calculated as:
+where \eqn{A_i}, \eqn{D_i}, \eqn{C_i} and \eqn{F_i} are standardized
+interaction abundance, specialization, connectivity and occurrence
+frequency, respectively.
 
-\deqn{
-IPR_i =
-w_A A_i +
-w_D D_i +
-w_C C_i +
-w_F F_i
-}
+Each weight must be a finite, non-negative numeric scalar. The four
+weights must sum to one, allowing a numerical tolerance of 1e-8.
 
-where \eqn{A_i} is standardized interaction abundance, \eqn{D_i} is
-standardized species specialization, \eqn{C_i} is standardized
-connectivity, and \eqn{F_i} is standardized occurrence frequency.
-
-The weights must satisfy:
-
-\deqn{
-w_A + w_D + w_C + w_F = 1.
-}
+Scores are relative to the supplied set of plants. A zero score does
+not necessarily mean that a plant has no ecological importance.
 }
