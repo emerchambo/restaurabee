@@ -34,4 +34,9 @@ in the supplied matrix. Independent partner abundances are not used.
 
 Missing or non-finite d' values stop the calculation and identify the
 affected species.
+
+Values outside the interval from zero to one by at most \code{1e-12}
+are adjusted to the nearest
+boundary to account for numerical rounding. Larger deviations stop
+the calculation and identify the affected species.
 }

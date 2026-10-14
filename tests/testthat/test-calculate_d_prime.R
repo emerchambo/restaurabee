@@ -74,7 +74,10 @@ test_that("species remain associated with their values after reordering", {
 })
 
 test_that("non-numeric inputs are rejected", {
-  expect_error(calculate_d_prime(NULL), "numeric matrix")
+  expect_error(
+    calculate_d_prime(NULL),
+    "numeric matrix"
+  )
 
   expect_error(
     calculate_d_prime(as.data.frame(dprime_test_matrix())),
@@ -101,29 +104,52 @@ test_that("missing, infinite and negative values are rejected", {
   matriz <- dprime_test_matrix()
   matriz[1, 1] <- -1
 
-  expect_error(calculate_d_prime(matriz), "negative values")
+  expect_error(
+    calculate_d_prime(matriz),
+    "negative values"
+  )
 })
 
 test_that("species identifiers must be present and unique", {
   matriz <- dprime_test_matrix()
   rownames(matriz) <- NULL
-  expect_error(calculate_d_prime(matriz), "Row names")
+
+  expect_error(
+    calculate_d_prime(matriz),
+    "Row names"
+  )
 
   matriz <- dprime_test_matrix()
   colnames(matriz) <- NULL
-  expect_error(calculate_d_prime(matriz), "Column names")
+
+  expect_error(
+    calculate_d_prime(matriz),
+    "Column names"
+  )
 
   matriz <- dprime_test_matrix()
   rownames(matriz) <- c("A", "A", "C")
-  expect_error(calculate_d_prime(matriz), "Row names")
+
+  expect_error(
+    calculate_d_prime(matriz),
+    "Row names"
+  )
 
   matriz <- dprime_test_matrix()
   colnames(matriz) <- c("b1", "", "b3")
-  expect_error(calculate_d_prime(matriz), "Column names")
+
+  expect_error(
+    calculate_d_prime(matriz),
+    "Column names"
+  )
 
   matriz <- dprime_test_matrix()
   rownames(matriz)[1] <- NA_character_
-  expect_error(calculate_d_prime(matriz), "Row names")
+
+  expect_error(
+    calculate_d_prime(matriz),
+    "Row names"
+  )
 })
 
 test_that("small networks are rejected with a clear message", {
@@ -156,4 +182,104 @@ test_that("species without interaction records are rejected", {
     calculate_d_prime(matriz),
     "Bees without interaction records: Bee_2"
   )
+})
+
+test_that("small numerical deviations are adjusted at both boundaries", {
+  testthat::local_mocked_bindings(
+    specieslevel = function(...) {
+      list(
+        "lower level" = data.frame(
+          d = c(-1e-14, 1 + .Machine$double.eps, 0.5),
+          row.names = c("Plant_A", "Plant_B", "Plant_C")
+        ),
+        "higher level" = data.frame(
+          d = c(1 + .Machine$double.eps, -1e-14, 0.5),
+          row.names = c("Bee_1", "Bee_2", "Bee_3")
+        )
+      )
+    },
+    .package = "bipartite"
+  )
+
+  resultado <- calculate_d_prime(dprime_test_matrix())
+
+  expect_identical(
+    resultado$plant_dprime$d_prime,
+    c(0, 1, 0.5)
+  )
+
+  expect_identical(
+    resultado$bee_dprime$d_prime,
+    c(1, 0, 0.5)
+  )
+})
+
+test_that("values within the interval are preserved", {
+  testthat::local_mocked_bindings(
+    specieslevel = function(...) {
+      list(
+        "lower level" = data.frame(
+          d = c(1e-14, 1 - 1e-14, 0.5),
+          row.names = c("Plant_A", "Plant_B", "Plant_C")
+        ),
+        "higher level" = data.frame(
+          d = c(0.25, 0.75, 0.5),
+          row.names = c("Bee_1", "Bee_2", "Bee_3")
+        )
+      )
+    },
+    .package = "bipartite"
+  )
+
+  resultado <- calculate_d_prime(dprime_test_matrix())
+
+  expect_identical(
+    resultado$plant_dprime$d_prime,
+    c(1e-14, 1 - 1e-14, 0.5)
+  )
+
+  expect_identical(
+    resultado$bee_dprime$d_prime,
+    c(0.25, 0.75, 0.5)
+  )
+})
+
+test_that("deviations beyond tolerance are rejected for plants and bees", {
+  mocked_output <- list(
+    "lower level" = data.frame(
+      d = c(0.25, 0.75, 0.5),
+      row.names = c("Plant_A", "Plant_B", "Plant_C")
+    ),
+    "higher level" = data.frame(
+      d = c(0.25, 0.75, 0.5),
+      row.names = c("Bee_1", "Bee_2", "Bee_3")
+    )
+  )
+
+  testthat::local_mocked_bindings(
+    specieslevel = function(...) mocked_output,
+    .package = "bipartite"
+  )
+
+  for (valor in c(-1e-8, 1 + 1e-8)) {
+    mocked_output$`lower level`$d[1] <- valor
+
+    expect_error(
+      calculate_d_prime(dprime_test_matrix()),
+      "beyond numerical tolerance for plants: Plant_A",
+      fixed = TRUE
+    )
+  }
+
+  mocked_output$`lower level`$d[1] <- 0.25
+
+  for (valor in c(-1e-8, 1 + 1e-8)) {
+    mocked_output$`higher level`$d[1] <- valor
+
+    expect_error(
+      calculate_d_prime(dprime_test_matrix()),
+      "beyond numerical tolerance for bees: Bee_1",
+      fixed = TRUE
+    )
+  }
 })

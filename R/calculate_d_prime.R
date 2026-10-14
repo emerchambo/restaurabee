@@ -26,6 +26,11 @@
 #' Missing or non-finite d' values stop the calculation and identify the
 #' affected species.
 #'
+#' Values outside the interval from zero to one by at most \code{1e-12}
+#' are adjusted to the nearest
+#' boundary to account for numerical rounding. Larger deviations stop
+#' the calculation and identify the affected species.
+#'
 #' @export
 calculate_d_prime <- function(interaction_matrix) {
 
@@ -154,6 +159,41 @@ calculate_d_prime <- function(interaction_matrix) {
       call. = FALSE
     )
   }
+
+  adjust_boundaries <- function(values, species, label) {
+
+    tolerance <- 1e-12
+
+    outside_range <- values < -tolerance |
+      values > 1 + tolerance
+
+    if (any(outside_range)) {
+      stop(
+        "d' values outside [0, 1] beyond numerical tolerance for ",
+        label,
+        ": ",
+        paste(species[outside_range], collapse = ", "),
+        call. = FALSE
+      )
+    }
+
+    values[values < 0] <- 0
+    values[values > 1] <- 1
+
+    values
+  }
+
+  plant_dprime$d_prime <- adjust_boundaries(
+    plant_dprime$d_prime,
+    plant_dprime$plant_species,
+    "plants"
+  )
+
+  bee_dprime$d_prime <- adjust_boundaries(
+    bee_dprime$d_prime,
+    bee_dprime$bee_species,
+    "bees"
+  )
 
   list(
     plant_dprime = plant_dprime,
