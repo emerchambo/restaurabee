@@ -1,3 +1,12 @@
+# restaurabee 0.2.1
+
+## Bug fixes
+
+- Adjusted d' values outside the interval from zero to one by no more
+  than 1e-12 to account for numerical rounding.
+- Retained errors for values outside this tolerance.
+- Added tests for boundary adjustment and preservation of valid values.
+
 # restaurabee 0.2.0
 
 ## New features
