@@ -2,6 +2,7 @@
 
 S3method(print,restaurabee)
 S3method(summary,restaurabee)
+export(bootstrap_priority)
 export(build_interaction_matrix)
 export(calculate_IIP)
 export(calculate_IPR)
