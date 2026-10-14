@@ -12,21 +12,24 @@
 **restaurabee** is an R package for prioritizing plant species for
 ecological restoration using plant–pollinator interaction networks.
 
-The package provides a reproducible workflow that integrates interaction
-abundance, occurrence frequency, network connectivity, and species
-specialization to identify plant species with the greatest potential to
-support the restoration of pollination interactions.
+The package combines interaction abundance, occurrence frequency,
+connectivity and species specialization to rank plants. It also
+evaluates the bee partners represented by selected plants and the
+stability of selection under resampling.
 
 ## Main features
 
 - Validate plant–pollinator interaction datasets.
 - Build quantitative interaction matrices.
 - Calculate the **Interaction Importance Index (IIP)**.
-- Estimate plant species specialization (**d’**).
+- Estimate species specialization (**d’**) for plants and bees.
 - Calculate the **Interaction-based Restoration Priority Index (IPR)**.
-- Select priority species based on cumulative restoration priority.
-- Perform sensitivity analyses under alternative weighting schemes.
-- Calculate ecological network metrics using the **bipartite** package.
+- Set component weights, selection thresholds and treatment of boundary
+  ties.
+- Compare rankings under alternative weighting schemes.
+- Calculate selected ecological network metrics using **bipartite**.
+- Calculate the coverage of recorded bee species by selected plants.
+- Evaluate plant selection stability by resampling sampling units.
 
 ## Installation
 
@@ -45,15 +48,19 @@ plant–pollinator interaction and three required columns:
 - `plant_species`: a consistent and unambiguous plant species
   identifier;
 - `bee_species`: a consistent and unambiguous bee species identifier;
-- `sample_unit`: a unique identifier for the sampling unit in which the
+- `sample_unit`: an identifier for the sampling unit in which the
   interaction was recorded.
 
-Repeated rows must not be removed when they represent separate
-interaction records because they contribute to interaction abundance.
+Repeated rows must be retained when they represent separate interaction
+records, because they contribute to interaction abundance.
 
-If subplot numbers are repeated among dates, sites, transects, or plots,
-`sample_unit` should be constructed as a composite identifier. For
-example:
+The researcher defines the sampling unit according to the study design.
+Records belonging to the same unit must share its identifier.
+
+If identifiers are reused among dates, sites, transects or plots,
+construct an identifier that distinguishes the units used in the
+analysis. For example, when each subplot visit is treated as a sampling
+unit:
 
 ``` r
 interaction_data$sample_unit <- paste(
@@ -66,9 +73,13 @@ interaction_data$sample_unit <- paste(
 )
 ```
 
-Species identifiers should not contain leading or trailing spaces,
-hidden characters, or terminal punctuation. Full scientific names or
-other unambiguous identifiers are recommended.
+Distinguishing visits does not establish that they are independent. For
+bootstrap analyses, repeated visits to the same location can be kept
+together using a separate grouping column.
+
+Species identifiers should be checked for spelling differences,
+whitespace and inconsistent punctuation. Full scientific names or other
+unambiguous identifiers are recommended.
 
 ## Example
 
@@ -181,6 +192,13 @@ result$selected_species
 ### Sensitivity analysis
 
 ``` r
+result$sensitivity$scenario_weights
+#>                abundance specialization connectivity frequency
+#> equal               0.25           0.25         0.25      0.25
+#> abundance           0.40           0.20         0.20      0.20
+#> specialization      0.20           0.40         0.20      0.20
+#> connectivity        0.20           0.20         0.40      0.20
+#> frequency           0.20           0.20         0.20      0.40
 result$sensitivity$correlation_matrix
 #>                     rank_equal rank_abundance rank_specialization
 #> rank_equal                   1              1                   1
@@ -196,40 +214,126 @@ result$sensitivity$correlation_matrix
 #> rank_frequency                      1              1
 ```
 
-## Workflow
+### Custom analysis settings
 
-The complete workflow is run with `restaurabee()`, which coordinates the
-following steps:
+Weights must be named, non-negative and sum to one. The selection
+threshold specifies the cumulative proportion of total IPR to retain.
+Use `ties = "include"` to retain all plants tied with the last selected
+plant.
 
-``` text
-Interaction data
-        │
-        ▼
-Data validation
-        │
-        ▼
-build_interaction_matrix()
-        │
-        ├──────────────► Network metrics
-        │
-        ▼
-calculate_IIP()
-        │
-        ▼
-calculate_d_prime()
-        │
-        ▼
-calculate_IPR()
-        │
-        ▼
-select_species()
-        │
-        ▼
-sensitivity_analysis()
+``` r
+custom_result <- restaurabee(
+  interaction_data,
+  weights = c(
+    abundance = 0.20,
+    specialization = 0.40,
+    connectivity = 0.20,
+    frequency = 0.20
+  ),
+  threshold = 0.70,
+  ties = "include",
+  network_indices = c("connectance", "H2")
+)
+
+custom_result$settings
+#> $weights
+#>      abundance specialization   connectivity      frequency 
+#>            0.2            0.4            0.2            0.2 
+#> 
+#> $threshold
+#> [1] 0.7
+#> 
+#> $ties
+#> [1] "include"
+#> 
+#> $network_indices
+#> [1] "connectance" "H2"         
+#> 
+#> $seed
+#> NULL
 ```
 
-The individual calculation functions are also exported for users who
-need greater control over the workflow.
+### Bee coverage
+
+Coverage is the proportion of recorded bee species that interact with at
+least one selected plant. Each bee species is counted once.
+
+``` r
+if (!is.null(result$selected_species)) {
+  coverage <- pollinator_coverage(
+    plant_species = result$selected_species$plant_species,
+    interaction_matrix = result$interaction_matrix
+  )
+
+  coverage
+}
+#> $coverage
+#> [1] 1
+#> 
+#> $n_plants
+#> [1] 4
+#> 
+#> $n_bees_total
+#> [1] 5
+#> 
+#> $n_bees_covered
+#> [1] 5
+#> 
+#> $covered
+#> [1] "Bee_1" "Bee_2" "Bee_3" "Bee_4" "Bee_5"
+#> 
+#> $not_covered
+#> character(0)
+```
+
+This describes partners recorded in the supplied network. It does not
+estimate sampling completeness or predict the persistence of bee
+populations after restoration.
+
+### Bootstrap selection stability
+
+`bootstrap_priority()` resamples units with replacement and recalculates
+metrics and selection. It is run separately from `restaurabee()`.
+
+``` r
+bootstrap_result <- bootstrap_priority(
+  interaction_data,
+  n_boot = 1000,
+  weights = result$settings$weights,
+  threshold = result$settings$threshold,
+  ties = result$settings$ties,
+  seed = 123
+)
+
+bootstrap_result$diagnostics
+bootstrap_result$summary
+```
+
+By default, records from each `sample_unit` are resampled together. Use
+`resample_unit` to specify a grouping column when observations from the
+same location should remain together.
+
+Always inspect the diagnostics. Selection frequencies use only
+replicates with defined selection. IPR and rank summaries additionally
+require the plant to be present. Replicates with total IPR zero are
+retained for inspection, with selection recorded as `NA`.
+
+The reported intervals describe the bootstrap distributions. They are
+not calibrated confidence intervals for true priorities.
+
+## Workflow
+
+`restaurabee()` validates the data, builds the interaction matrix,
+calculates IIP and d’, combines the plant metrics, and calculates IPR.
+It then selects plants, compares weighting scenarios and calculates the
+requested network metrics.
+
+`pollinator_coverage()` evaluates the bee partners represented by a
+plant selection. `bootstrap_priority()` evaluates the stability of
+prioritization under resampling. Both functions are called separately.
+
+Individual calculation functions are also exported for users who need
+greater control over the workflow.
 
 ## Interpretation
 
@@ -238,8 +342,13 @@ as an absolute measure of restoration success. Results depend on
 sampling effort, taxonomic resolution, spatial and temporal coverage,
 and data quality.
 
+Sensitivity analysis evaluates changes in weights. Bootstrap analysis
+evaluates changes induced by resampling the units represented in the
+data. Neither procedure corrects unequal observation effort or recovers
+sampling units that were not recorded.
+
 The prioritization should be considered alongside ecological
-feasibility, species origin, establishment requirements, and other
+feasibility, species origin, establishment requirements and other
 restoration criteria.
 
 ## Citation

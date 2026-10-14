@@ -1,7 +1,7 @@
 Package: restaurabee
 Type: Package
 Title: Prioritization of Plant Species for Ecological Restoration Using Plant-Pollinator Interaction Networks
-Version: 0.1.0
+Version: 0.2.0
 Authors@R:
     person(
         given = "Emerson",
@@ -14,11 +14,14 @@ Description: Provides a workflow for prioritizing plant species for
     ecological restoration based on plant-pollinator interaction networks.
     The package calculates the Interaction Importance Index (IIP), species
     specialization (d'), the Interaction-based Restoration Priority Index
-    (IPR), sensitivity analyses, and network-level metrics to support
-    evidence-based restoration planning.
+    (IPR), sensitivity analyses, and network-level metrics. Additional
+    functions calculate the coverage of recorded bee species by selected
+    plants and assess plant selection stability through bootstrap
+    resampling of sampling units.
 License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
+Depends:
+    R (>= 4.1.0)
 Imports:
     bipartite,
     dplyr,
