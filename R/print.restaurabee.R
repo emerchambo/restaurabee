@@ -1,7 +1,6 @@
 #' Print method for restaurabee objects
 #'
-#' Displays a concise summary of the results produced by
-#' \code{restaurabee()}.
+#' Displays the dataset size, analysis settings and main results.
 #'
 #' @param x An object of class \code{restaurabee}.
 #' @param ... Additional arguments, currently ignored.
@@ -10,9 +9,38 @@
 #'
 #' @details
 #' If selection failed, the output reports that selection is unavailable.
+#' Objects without stored settings are displayed using the original defaults.
 #'
 #' @export
 print.restaurabee <- function(x, ...) {
+
+  weights <- x$settings$weights
+  threshold <- x$settings$threshold
+  ties <- x$settings$ties
+
+  if (is.null(weights)) {
+    weights <- c(
+      abundance = 0.25,
+      specialization = 0.25,
+      connectivity = 0.25,
+      frequency = 0.25
+    )
+  }
+
+  if (is.null(threshold)) {
+    threshold <- 0.80
+  }
+
+  if (is.null(ties)) {
+    ties <- "first"
+  }
+
+  threshold_text <- format(
+    100 * threshold,
+    trim = TRUE,
+    scientific = FALSE,
+    digits = 10
+  )
 
   cat("\n")
   cat("=========================================\n")
@@ -39,6 +67,38 @@ print.restaurabee <- function(x, ...) {
     x$metadata$sampling_units
   ))
 
+  cat("\nIPR weights\n")
+
+  cat(sprintf(
+    "Abundance:        %.4g\n",
+    weights[["abundance"]]
+  ))
+
+  cat(sprintf(
+    "Specialization:   %.4g\n",
+    weights[["specialization"]]
+  ))
+
+  cat(sprintf(
+    "Connectivity:     %.4g\n",
+    weights[["connectivity"]]
+  ))
+
+  cat(sprintf(
+    "Frequency:        %.4g\n",
+    weights[["frequency"]]
+  ))
+
+  cat(sprintf(
+    "Selection threshold: %s%%\n",
+    threshold_text
+  ))
+
+  cat(sprintf(
+    "Boundary ties:       %s\n",
+    ties
+  ))
+
   cat("\nTop priority species\n")
   cat("----------------------------\n")
 
@@ -58,7 +118,8 @@ print.restaurabee <- function(x, ...) {
   } else {
 
     cat(sprintf(
-      "Selected species (80%% threshold): %d\n",
+      "Selected species (%s%% threshold): %d\n",
+      threshold_text,
       nrow(x$selected_species)
     ))
   }
@@ -82,22 +143,29 @@ print.restaurabee <- function(x, ...) {
 
   correlation_matrix <- x$sensitivity$correlation_matrix
 
-  if (
-    !is.null(correlation_matrix) &&
-    any(!is.na(correlation_matrix))
-  ) {
+  if (!is.null(correlation_matrix)) {
 
-    upper_values <- correlation_matrix[upper.tri(correlation_matrix)]
+    correlations <- correlation_matrix[
+      upper.tri(correlation_matrix)
+    ]
 
-    mean_correlation <- mean(
-      upper_values,
-      na.rm = TRUE
-    )
+    correlations <- correlations[is.finite(correlations)]
+
+  } else {
+
+    correlations <- numeric(0)
+  }
+
+  if (length(correlations) > 0L) {
 
     cat(sprintf(
       "Mean sensitivity correlation: %.3f\n",
-      mean_correlation
+      mean(correlations)
     ))
+
+  } else {
+
+    cat("Sensitivity correlations: not available.\n")
   }
 
   cat("\nDetailed results:\n")
@@ -107,6 +175,7 @@ print.restaurabee <- function(x, ...) {
   cat("  result$d_prime\n")
   cat("  result$sensitivity\n")
   cat("  result$network_metrics\n")
+  cat("  result$settings\n")
 
   cat("\n")
 

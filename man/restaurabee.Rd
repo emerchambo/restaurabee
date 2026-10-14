@@ -8,7 +8,11 @@ restaurabee(
   interaction_data,
   network_indices = c("connectance", "H2", "weighted NODF", "linkage density",
     "web asymmetry"),
-  seed = NULL
+  seed = NULL,
+  weights = c(abundance = 0.25, specialization = 0.25, connectivity = 0.25, frequency =
+    0.25),
+  threshold = 0.8,
+  ties = c("first", "include")
 )
 }
 \arguments{
@@ -20,13 +24,26 @@ restaurabee(
 }}
 
 \item{network_indices}{Character vector of indices passed to
-\code{bipartite::networklevel()}. By default, calculates connectance,
+\code{bipartite::networklevel()}. The default calculates connectance,
 H2, weighted NODF, linkage density and web asymmetry.
 Use \code{"ALLBUTDD"} for the broader set provided by bipartite,
 or \code{NULL} to skip network metrics.}
 
 \item{seed}{Optional non-negative integer seed for network metrics.
 The previous random-number state is restored afterwards.}
+
+\item{weights}{Named numeric vector with weights for \code{abundance},
+\code{specialization}, \code{connectivity} and \code{frequency}.
+Weights must be finite, non-negative and sum to one.
+The default is 0.25 for each component.}
+
+\item{threshold}{Cumulative proportion of total IPR to retain.
+Must be greater than zero and less than or equal to one.
+Default is 0.80.}
+
+\item{ties}{Treatment of ties at the selection boundary.
+\code{"first"} keeps the first rows needed to reach the threshold.
+\code{"include"} also keeps all plants tied with the last selected plant.}
 }
 \value{
 An object of class \code{restaurabee} containing:
@@ -37,29 +54,31 @@ An object of class \code{restaurabee} containing:
 \item \code{d_prime}: specialization values for plants and bees.
 \item \code{plant_metrics}: ecological metrics for each plant.
 \item \code{prioritization}: IPR scores and standardized components.
-\item \code{selected_species}: plants selected by cumulative IPR,
-or \code{NULL} if selection fails.
-\item \code{sensitivity}: comparisons among weighting scenarios.
+\item \code{selected_species}: selected plants, or \code{NULL}
+if selection fails.
+\item \code{sensitivity}: ranking comparisons using the supplied
+weights as the reference.
 \item \code{network_metrics}: requested network descriptors, or
 \code{NULL} if skipped or if their calculation fails.
+\item \code{settings}: weights, threshold, tie handling,
+requested network indices and seed.
 }
 }
 \description{
-Runs the restoration prioritization workflow from plant-pollinator
-interaction records.
+Calculates plant priority scores from plant-pollinator interaction
+records, selects plants and compares rankings under different weights.
 }
 \details{
-Calculates the Interaction Importance Index (IIP), species
-specialization (d'), restoration priority scores (IPR),
-species selection, sensitivity analysis and network descriptors.
+The same weights are used for the IPR and the reference ranking
+in the sensitivity analysis. Changing the threshold or tie handling
+changes selection, not the IPR scores.
 
-Some additional network indices use random simulations. Supply a seed
-when requesting these indices to reproduce results in the same
-software environment.
+The selection threshold is a proportion of IPR scores, not a measure
+of pollinator coverage or restoration success.
 
-Changing network indices does not change IIP, d', IPR or species
-selection. Additional metrics are available in \code{network_metrics},
-even when they are not displayed by \code{print()} or \code{summary()}.
+Some network indices use random simulations. Supply a seed to
+reproduce these calculations in the same software environment.
+Network indices do not affect priority scores or selection.
 }
 \examples{
 data <- data.frame(
@@ -69,6 +88,18 @@ data <- data.frame(
 )
 
 result <- restaurabee(data)
-result_without_metrics <- restaurabee(data, network_indices = NULL)
+
+result_custom <- restaurabee(
+  data,
+  network_indices = NULL,
+  weights = c(
+    abundance = 0.20,
+    specialization = 0.40,
+    connectivity = 0.20,
+    frequency = 0.20
+  ),
+  threshold = 0.70,
+  ties = "include"
+)
 
 }

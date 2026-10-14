@@ -1,7 +1,7 @@
 #' Summary method for restaurabee objects
 #'
-#' Displays a detailed summary of the results produced by
-#' \code{restaurabee()}.
+#' Displays analysis settings, priority scores, selected plants
+#' and network results.
 #'
 #' @param object An object of class \code{restaurabee}.
 #' @param ... Additional arguments, currently ignored.
@@ -10,9 +10,38 @@
 #'
 #' @details
 #' If selection failed, the output reports that selection is unavailable.
+#' Objects without stored settings are displayed using the original defaults.
 #'
 #' @export
 summary.restaurabee <- function(object, ...) {
+
+  weights <- object$settings$weights
+  threshold <- object$settings$threshold
+  ties <- object$settings$ties
+
+  if (is.null(weights)) {
+    weights <- c(
+      abundance = 0.25,
+      specialization = 0.25,
+      connectivity = 0.25,
+      frequency = 0.25
+    )
+  }
+
+  if (is.null(threshold)) {
+    threshold <- 0.80
+  }
+
+  if (is.null(ties)) {
+    ties <- "first"
+  }
+
+  threshold_text <- format(
+    100 * threshold,
+    trim = TRUE,
+    scientific = FALSE,
+    digits = 10
+  )
 
   cat("\n")
   cat("=========================================\n")
@@ -40,6 +69,39 @@ summary.restaurabee <- function(object, ...) {
   cat(sprintf(
     "Sampling units:    %d\n\n",
     object$metadata$sampling_units
+  ))
+
+  cat("Analysis settings\n")
+  cat("----------------------------\n")
+
+  cat(sprintf(
+    "Abundance weight:      %.4g\n",
+    weights[["abundance"]]
+  ))
+
+  cat(sprintf(
+    "Specialization weight: %.4g\n",
+    weights[["specialization"]]
+  ))
+
+  cat(sprintf(
+    "Connectivity weight:   %.4g\n",
+    weights[["connectivity"]]
+  ))
+
+  cat(sprintf(
+    "Frequency weight:      %.4g\n",
+    weights[["frequency"]]
+  ))
+
+  cat(sprintf(
+    "Selection threshold:   %s%%\n",
+    threshold_text
+  ))
+
+  cat(sprintf(
+    "Boundary ties:         %s\n\n",
+    ties
   ))
 
   cat("Interaction Importance Index (Top 5)\n")
@@ -101,7 +163,6 @@ summary.restaurabee <- function(object, ...) {
     for (m in metrics) {
 
       if (m %in% names(object$network_metrics)) {
-
         cat(sprintf(
           "%-20s %.3f\n",
           paste0(m, ":"),
@@ -118,26 +179,31 @@ summary.restaurabee <- function(object, ...) {
 
   corr <- object$sensitivity$correlation_matrix
 
-  if (
-    !is.null(corr) &&
-    any(!is.na(corr))
-  ) {
+  if (!is.null(corr)) {
 
-    upper <- corr[upper.tri(corr)]
+    correlations <- corr[upper.tri(corr)]
+    correlations <- correlations[is.finite(correlations)]
+
+  } else {
+
+    correlations <- numeric(0)
+  }
+
+  if (length(correlations) > 0L) {
 
     cat(sprintf(
       "Mean correlation: %.3f\n",
-      mean(upper, na.rm = TRUE)
+      mean(correlations)
     ))
 
     cat(sprintf(
       "Minimum correlation: %.3f\n",
-      min(upper, na.rm = TRUE)
+      min(correlations)
     ))
 
     cat(sprintf(
       "Maximum correlation: %.3f\n",
-      max(upper, na.rm = TRUE)
+      max(correlations)
     ))
 
   } else {

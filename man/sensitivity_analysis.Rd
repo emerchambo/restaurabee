@@ -4,42 +4,62 @@
 \alias{sensitivity_analysis}
 \title{Sensitivity analysis for restoration prioritization}
 \usage{
-sensitivity_analysis(prioritization)
+sensitivity_analysis(
+  prioritization,
+  weights = c(abundance = 0.25, specialization = 0.25, connectivity = 0.25, frequency =
+    0.25)
+)
 }
 \arguments{
 \item{prioritization}{A data frame produced by \code{calculate_IPR()},
-containing the numeric columns \code{abundance_pad},
-\code{d_prime_pad}, \code{connectivity_pad} and \code{frequency_pad}.
-Values must be finite and between zero and one.}
+with the columns \code{abundance_pad}, \code{d_prime_pad},
+\code{connectivity_pad} and \code{frequency_pad}.
+These columns must contain numbers between zero and one,
+without missing or infinite values.}
+
+\item{weights}{Named numeric vector with weights for \code{abundance},
+\code{specialization}, \code{connectivity} and \code{frequency}.
+Weights must be non-negative and sum to one.
+The default is 0.25 for each component.}
 }
 \value{
 A list containing:
 \itemize{
 \item \code{correlation_matrix}: Spearman correlations between
-rankings under the five scenarios.
-\item \code{results_table}: original columns with the scores and
-ranks calculated for each scenario.
+the rankings.
+\item \code{results_table}: the input data with IPR scores and
+ranks for each set of weights.
+\item \code{scenario_weights}: the weights used in each comparison.
 }
 }
 \description{
-Compares IPR rankings under five weighting schemes using Spearman
-rank correlations.
+Checks how the order of plant species changes when the IPR weights
+are changed. Rankings are compared using Spearman correlations.
 }
 \details{
-The reference scenario assigns 0.25 to each component. Four alternative
-scenarios assign 0.40 to one component and 0.20 to each of the others.
+The analysis starts with the weights supplied by the user. It then
+increases one weight at a time by 0.15, up to a maximum of one.
+The other weights are reduced in proportion to their starting values.
 
-Larger scores receive smaller rank numbers. Equal scores receive
-the same rank, using \code{dplyr::min_rank()}.
+With the default weights, each comparison uses 0.40 for one component
+and 0.20 for the other three. If a component already has weight one,
+increasing that weight leaves the original ranking unchanged.
 
-If all species receive the same score in a scenario, its ranking
-is constant and its correlations are undefined. These entries are
-returned as \code{NA}, with a warning identifying the scenario.
+The starting scores and ranks are named \code{IPR_equal} and
+\code{rank_equal} when all weights are 0.25. For other weights,
+they are named \code{IPR_base} and \code{rank_base}.
 
-High correlations indicate similar rankings under the tested weights.
-They do not measure sampling uncertainty or guarantee that the same
-species will be selected at a cumulative threshold.
+Species with larger scores come first. Equal scores receive the
+same rank, following \code{dplyr::min_rank()}.
 
-These scenarios always use the fixed weights described above,
-regardless of the weights used to calculate the supplied IPR.
+When every species has the same score, the correlation cannot be
+calculated. The function returns \code{NA} for those comparisons
+and gives a warning.
+
+High correlations mean that the tested weights give similar rankings.
+They do not describe sampling uncertainty or ensure that the same
+plants will be selected.
+
+When calling this function directly, supply the weights used to
+calculate the original IPR.
 }

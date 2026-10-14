@@ -1,11 +1,7 @@
 #' Ecological Restoration Prioritization Using Plant-Pollinator Networks
 #'
-#' Runs the restoration prioritization workflow from plant-pollinator
-#' interaction records.
-#'
-#' Calculates the Interaction Importance Index (IIP), species
-#' specialization (d'), restoration priority scores (IPR),
-#' species selection, sensitivity analysis and network descriptors.
+#' Calculates plant priority scores from plant-pollinator interaction
+#' records, selects plants and compares rankings under different weights.
 #'
 #' @param interaction_data A data frame containing:
 #' \describe{
@@ -14,12 +10,22 @@
 #'   \item{sample_unit}{Sampling unit identifier.}
 #' }
 #' @param network_indices Character vector of indices passed to
-#' \code{bipartite::networklevel()}. By default, calculates connectance,
+#' \code{bipartite::networklevel()}. The default calculates connectance,
 #' H2, weighted NODF, linkage density and web asymmetry.
 #' Use \code{"ALLBUTDD"} for the broader set provided by bipartite,
 #' or \code{NULL} to skip network metrics.
 #' @param seed Optional non-negative integer seed for network metrics.
 #' The previous random-number state is restored afterwards.
+#' @param weights Named numeric vector with weights for \code{abundance},
+#' \code{specialization}, \code{connectivity} and \code{frequency}.
+#' Weights must be finite, non-negative and sum to one.
+#' The default is 0.25 for each component.
+#' @param threshold Cumulative proportion of total IPR to retain.
+#' Must be greater than zero and less than or equal to one.
+#' Default is 0.80.
+#' @param ties Treatment of ties at the selection boundary.
+#' \code{"first"} keeps the first rows needed to reach the threshold.
+#' \code{"include"} also keeps all plants tied with the last selected plant.
 #'
 #' @return An object of class \code{restaurabee} containing:
 #' \itemize{
@@ -29,21 +35,27 @@
 #'   \item \code{d_prime}: specialization values for plants and bees.
 #'   \item \code{plant_metrics}: ecological metrics for each plant.
 #'   \item \code{prioritization}: IPR scores and standardized components.
-#'   \item \code{selected_species}: plants selected by cumulative IPR,
-#'   or \code{NULL} if selection fails.
-#'   \item \code{sensitivity}: comparisons among weighting scenarios.
+#'   \item \code{selected_species}: selected plants, or \code{NULL}
+#'   if selection fails.
+#'   \item \code{sensitivity}: ranking comparisons using the supplied
+#'   weights as the reference.
 #'   \item \code{network_metrics}: requested network descriptors, or
 #'   \code{NULL} if skipped or if their calculation fails.
+#'   \item \code{settings}: weights, threshold, tie handling,
+#'   requested network indices and seed.
 #' }
 #'
 #' @details
-#' Some additional network indices use random simulations. Supply a seed
-#' when requesting these indices to reproduce results in the same
-#' software environment.
+#' The same weights are used for the IPR and the reference ranking
+#' in the sensitivity analysis. Changing the threshold or tie handling
+#' changes selection, not the IPR scores.
 #'
-#' Changing network indices does not change IIP, d', IPR or species
-#' selection. Additional metrics are available in \code{network_metrics},
-#' even when they are not displayed by \code{print()} or \code{summary()}.
+#' The selection threshold is a proportion of IPR scores, not a measure
+#' of pollinator coverage or restoration success.
+#'
+#' Some network indices use random simulations. Supply a seed to
+#' reproduce these calculations in the same software environment.
+#' Network indices do not affect priority scores or selection.
 #'
 #' @examples
 #' data <- data.frame(
@@ -53,7 +65,19 @@
 #' )
 #'
 #' result <- restaurabee(data)
-#' result_without_metrics <- restaurabee(data, network_indices = NULL)
+#'
+#' result_custom <- restaurabee(
+#'   data,
+#'   network_indices = NULL,
+#'   weights = c(
+#'     abundance = 0.20,
+#'     specialization = 0.40,
+#'     connectivity = 0.20,
+#'     frequency = 0.20
+#'   ),
+#'   threshold = 0.70,
+#'   ties = "include"
+#' )
 #'
 #' @export
 restaurabee <- function(
@@ -65,8 +89,38 @@ restaurabee <- function(
       "linkage density",
       "web asymmetry"
     ),
-    seed = NULL
+    seed = NULL,
+    weights = c(
+      abundance = 0.25,
+      specialization = 0.25,
+      connectivity = 0.25,
+      frequency = 0.25
+    ),
+    threshold = 0.80,
+    ties = c("first", "include")
 ) {
+
+  weights <- validate_ipr_weights(weights)
+  ties <- match.arg(ties)
+
+  if (
+    !is.numeric(threshold) ||
+    length(threshold) != 1L ||
+    !is.null(dim(threshold)) ||
+    !is.finite(threshold)
+  ) {
+    stop(
+      "`threshold` must be a finite numeric scalar.",
+      call. = FALSE
+    )
+  }
+
+  if (threshold <= 0 || threshold > 1) {
+    stop(
+      "`threshold` must be greater than 0 and less than or equal to 1.",
+      call. = FALSE
+    )
+  }
 
   if (!is.null(network_indices)) {
 
@@ -133,19 +187,36 @@ restaurabee <- function(
     by = "plant_species"
   )
 
-  prioritization <- calculate_IPR(plant_metrics)
+  prioritization <- calculate_IPR(
+    plant_metrics,
+    weight_abundance = weights[["abundance"]],
+    weight_specialization = weights[["specialization"]],
+    weight_connectivity = weights[["connectivity"]],
+    weight_frequency = weights[["frequency"]]
+  )
 
   sensitivity <- tryCatch(
-    sensitivity_analysis(prioritization),
+    sensitivity_analysis(
+      prioritization,
+      weights = weights
+    ),
     error = function(e) {
-      warning("Sensitivity analysis failed: ", e$message)
 
-      scenario_names <- c(
-        "rank_equal",
-        "rank_abundance",
-        "rank_specialization",
-        "rank_connectivity",
-        "rank_frequency"
+      warning(
+        "Sensitivity analysis failed: ",
+        conditionMessage(e),
+        call. = FALSE
+      )
+
+      base_name <- if (all(weights == 0.25)) {
+        "equal"
+      } else {
+        "base"
+      }
+
+      scenario_names <- paste0(
+        "rank_",
+        c(base_name, names(weights))
       )
 
       correlation_matrix <- matrix(
@@ -157,14 +228,20 @@ restaurabee <- function(
 
       list(
         correlation_matrix = correlation_matrix,
-        results_table = prioritization
+        results_table = prioritization,
+        scenario_weights = NULL
       )
     }
   )
 
   selected_species <- tryCatch(
-    select_species(prioritization),
+    select_species(
+      prioritization,
+      threshold = threshold,
+      ties = ties
+    ),
     error = function(e) {
+
       warning(
         "Species selection failed: ",
         conditionMessage(e),
@@ -234,6 +311,7 @@ restaurabee <- function(
     network_metrics <- tryCatch(
       calculate_network_metrics(),
       error = function(e) {
+
         warning(
           "Network-level metrics failed: ",
           conditionMessage(e),
@@ -254,7 +332,14 @@ restaurabee <- function(
     prioritization = prioritization,
     selected_species = selected_species,
     sensitivity = sensitivity,
-    network_metrics = network_metrics
+    network_metrics = network_metrics,
+    settings = list(
+      weights = weights,
+      threshold = threshold,
+      ties = ties,
+      network_indices = network_indices,
+      seed = seed
+    )
   )
 
   class(result) <- "restaurabee"

@@ -15,9 +15,10 @@
 The input object, invisibly.
 }
 \description{
-Displays a detailed summary of the results produced by
-\code{restaurabee()}.
+Displays analysis settings, priority scores, selected plants
+and network results.
 }
 \details{
 If selection failed, the output reports that selection is unavailable.
+Objects without stored settings are displayed using the original defaults.
 }

@@ -15,9 +15,9 @@
 The input object \code{x}, invisibly.
 }
 \description{
-Displays a concise summary of the results produced by
-\code{restaurabee()}.
+Displays the dataset size, analysis settings and main results.
 }
 \details{
 If selection failed, the output reports that selection is unavailable.
+Objects without stored settings are displayed using the original defaults.
 }

@@ -1,41 +1,66 @@
 #' Sensitivity analysis for restoration prioritization
 #'
-#' Compares IPR rankings under five weighting schemes using Spearman
-#' rank correlations.
-#'
-#' The reference scenario assigns 0.25 to each component. Four alternative
-#' scenarios assign 0.40 to one component and 0.20 to each of the others.
+#' Checks how the order of plant species changes when the IPR weights
+#' are changed. Rankings are compared using Spearman correlations.
 #'
 #' @param prioritization A data frame produced by \code{calculate_IPR()},
-#' containing the numeric columns \code{abundance_pad},
-#' \code{d_prime_pad}, \code{connectivity_pad} and \code{frequency_pad}.
-#' Values must be finite and between zero and one.
+#' with the columns \code{abundance_pad}, \code{d_prime_pad},
+#' \code{connectivity_pad} and \code{frequency_pad}.
+#' These columns must contain numbers between zero and one,
+#' without missing or infinite values.
+#' @param weights Named numeric vector with weights for \code{abundance},
+#' \code{specialization}, \code{connectivity} and \code{frequency}.
+#' Weights must be non-negative and sum to one.
+#' The default is 0.25 for each component.
 #'
 #' @return A list containing:
 #' \itemize{
 #'   \item \code{correlation_matrix}: Spearman correlations between
-#'   rankings under the five scenarios.
-#'   \item \code{results_table}: original columns with the scores and
-#'   ranks calculated for each scenario.
+#'   the rankings.
+#'   \item \code{results_table}: the input data with IPR scores and
+#'   ranks for each set of weights.
+#'   \item \code{scenario_weights}: the weights used in each comparison.
 #' }
 #'
 #' @details
-#' Larger scores receive smaller rank numbers. Equal scores receive
-#' the same rank, using \code{dplyr::min_rank()}.
+#' The analysis starts with the weights supplied by the user. It then
+#' increases one weight at a time by 0.15, up to a maximum of one.
+#' The other weights are reduced in proportion to their starting values.
 #'
-#' If all species receive the same score in a scenario, its ranking
-#' is constant and its correlations are undefined. These entries are
-#' returned as \code{NA}, with a warning identifying the scenario.
+#' With the default weights, each comparison uses 0.40 for one component
+#' and 0.20 for the other three. If a component already has weight one,
+#' increasing that weight leaves the original ranking unchanged.
 #'
-#' High correlations indicate similar rankings under the tested weights.
-#' They do not measure sampling uncertainty or guarantee that the same
-#' species will be selected at a cumulative threshold.
+#' The starting scores and ranks are named \code{IPR_equal} and
+#' \code{rank_equal} when all weights are 0.25. For other weights,
+#' they are named \code{IPR_base} and \code{rank_base}.
 #'
-#' These scenarios always use the fixed weights described above,
-#' regardless of the weights used to calculate the supplied IPR.
+#' Species with larger scores come first. Equal scores receive the
+#' same rank, following \code{dplyr::min_rank()}.
+#'
+#' When every species has the same score, the correlation cannot be
+#' calculated. The function returns \code{NA} for those comparisons
+#' and gives a warning.
+#'
+#' High correlations mean that the tested weights give similar rankings.
+#' They do not describe sampling uncertainty or ensure that the same
+#' plants will be selected.
+#'
+#' When calling this function directly, supply the weights used to
+#' calculate the original IPR.
 #'
 #' @export
-sensitivity_analysis <- function(prioritization) {
+sensitivity_analysis <- function(
+    prioritization,
+    weights = c(
+      abundance = 0.25,
+      specialization = 0.25,
+      connectivity = 0.25,
+      frequency = 0.25
+    )
+) {
+
+  weights <- validate_ipr_weights(weights)
 
   if (!is.data.frame(prioritization)) {
     stop(
@@ -108,24 +133,57 @@ sensitivity_analysis <- function(prioritization) {
 
   prioritization_test <- as.data.frame(prioritization)
 
-  # Columns follow abundance, specialization, connectivity and frequency.
-  scenario_weights <- rbind(
-    equal          = c(0.25, 0.25, 0.25, 0.25),
-    abundance      = c(0.40, 0.20, 0.20, 0.20),
-    specialization = c(0.20, 0.40, 0.20, 0.20),
-    connectivity   = c(0.20, 0.20, 0.40, 0.20),
-    frequency      = c(0.20, 0.20, 0.20, 0.40)
+  base_name <- if (all(weights == 0.25)) {
+    "equal"
+  } else {
+    "base"
+  }
+
+  components <- names(weights)
+
+  scenario_weights <- matrix(
+    NA_real_,
+    nrow = 5,
+    ncol = 4,
+    dimnames = list(
+      c(base_name, components),
+      components
+    )
   )
+
+  scenario_weights[base_name, ] <- weights
+
+  for (component in components) {
+
+    alternative <- weights
+    increased_weight <- min(1, weights[[component]] + 0.15)
+    others <- setdiff(components, component)
+    remaining_weight <- sum(weights[others])
+
+    alternative[[component]] <- increased_weight
+
+    if (remaining_weight > 0) {
+
+      alternative[others] <-
+        weights[others] * (1 - increased_weight) / remaining_weight
+
+    } else {
+
+      alternative[others] <- 0
+    }
+
+    scenario_weights[component, ] <- alternative
+  }
 
   for (scenario in rownames(scenario_weights)) {
 
-    weights <- scenario_weights[scenario, ]
+    w <- scenario_weights[scenario, ]
 
     scores <-
-      weights[1] * prioritization_test$abundance_pad +
-      weights[2] * prioritization_test$d_prime_pad +
-      weights[3] * prioritization_test$connectivity_pad +
-      weights[4] * prioritization_test$frequency_pad
+      w[["abundance"]] * prioritization_test$abundance_pad +
+      w[["specialization"]] * prioritization_test$d_prime_pad +
+      w[["connectivity"]] * prioritization_test$connectivity_pad +
+      w[["frequency"]] * prioritization_test$frequency_pad
 
     prioritization_test[[paste0("IPR_", scenario)]] <- scores
   }
@@ -178,6 +236,7 @@ sensitivity_analysis <- function(prioritization) {
 
   list(
     correlation_matrix = correlation_matrix,
-    results_table = prioritization_test
+    results_table = prioritization_test,
+    scenario_weights = scenario_weights
   )
 }
