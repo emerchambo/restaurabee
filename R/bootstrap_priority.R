@@ -18,7 +18,8 @@
 #' @param ties Treatment of ties at the selection boundary:
 #' \code{"first"} or \code{"include"}. Passed to \code{select_species()}.
 #' @param conf Level used to calculate central empirical intervals
-#' for IPR scores and ranks. Default is 0.95.
+#' for IPR scores, ranks and the number of selected plants.
+#' Default is 0.95.
 #' @param seed Optional non-negative integer seed. The previous
 #' random-number state is restored when the function finishes.
 #'
@@ -29,6 +30,12 @@
 #'   \item \code{replicates}: scores, ranks and selection status for
 #'   plants in replicates with completed calculations. Selection is
 #'   \code{NA} when total IPR is zero.
+#'   \item \code{set_size}: number of selected plants in each requested
+#'   replicate (\code{replicates}), its frequency distribution
+#'   (\code{frequencies}) and a one-row \code{summary}.
+#'   Failed calculations and undefined selections have \code{NA}
+#'   sizes and are excluded from this summary. Their counts and
+#'   statuses remain available.
 #'   \item \code{diagnostics}: counts of completed calculations,
 #'   defined selections, calculation errors and undefined selections.
 #'   The \code{failures} table identifies excluded replicates and
@@ -72,6 +79,15 @@
 #' errors and undefined selections, reported separately as
 #' \code{n_calculation_failed} and \code{n_selection_undefined}.
 #'
+#' Set-size summaries use the same replicates with defined selection
+#' and the interval level supplied in \code{conf}. No additional
+#' draws are generated. The standard deviation is \code{NA} when
+#' fewer than two replicates have defined selection.
+#'
+#' The number of plants refers to the threshold and tie rule used
+#' in that bootstrap run. Its percentile bounds describe resampling
+#' variation, not an ideal number of plants for restoration.
+#'
 #' When units without interactions are absent from the input, the
 #' analysis is restricted to units represented in the data.
 #' Resampling does not correct differences in observation effort.
@@ -94,6 +110,7 @@ bootstrap_priority <- function(
 ) {
 
   is_scalar_number <- function(x) {
+
     is.numeric(x) &&
       length(x) == 1L &&
       is.null(dim(x)) &&
@@ -152,6 +169,7 @@ bootstrap_priority <- function(
   }
 
   if (!is.null(seed)) {
+
     if (
       !is_scalar_number(seed) ||
       seed < 0 ||
@@ -227,11 +245,13 @@ bootstrap_priority <- function(
   }
 
   # Each sampling unit must belong to one resampling group.
-  membership <- unique(data.frame(
-    sample_unit = interaction_data$sample_unit,
-    group = unit_ids,
-    stringsAsFactors = FALSE
-  ))
+  membership <- unique(
+    data.frame(
+      sample_unit = interaction_data$sample_unit,
+      group = unit_ids,
+      stringsAsFactors = FALSE
+    )
+  )
 
   if (anyDuplicated(membership$sample_unit)) {
     stop(
@@ -249,6 +269,7 @@ bootstrap_priority <- function(
   species <- unique(interaction_data$plant_species)
 
   if (!is.null(seed)) {
+
     had_seed <- exists(
       ".Random.seed",
       envir = globalenv(),
@@ -256,6 +277,7 @@ bootstrap_priority <- function(
     )
 
     if (had_seed) {
+
       previous_seed <- get(
         ".Random.seed",
         envir = globalenv(),
@@ -266,16 +288,19 @@ bootstrap_priority <- function(
     on.exit(
       {
         if (had_seed) {
+
           assign(
             ".Random.seed",
             previous_seed,
             envir = globalenv()
           )
+
         } else if (exists(
           ".Random.seed",
           envir = globalenv(),
           inherits = FALSE
         )) {
+
           rm(".Random.seed", envir = globalenv())
         }
       },
@@ -286,6 +311,7 @@ bootstrap_priority <- function(
   }
 
   n_boot <- as.integer(n_boot)
+
   successful <- vector("list", n_boot)
   errors <- rep(NA_character_, n_boot)
 
@@ -293,6 +319,7 @@ bootstrap_priority <- function(
 
     attempt <- tryCatch(
       {
+
         drawn_units <- sample.int(
           n_units,
           size = n_units,
@@ -331,7 +358,10 @@ bootstrap_priority <- function(
         )
 
         IIP <- calculate_IIP(bootstrap_data)
-        specialization <- calculate_d_prime(interaction_matrix)
+
+        specialization <- calculate_d_prime(
+          interaction_matrix
+        )
 
         plant_metrics <- dplyr::left_join(
           IIP,
@@ -350,6 +380,7 @@ bootstrap_priority <- function(
         selection_defined <- sum(priorities$IPR) > 0
 
         if (selection_defined) {
+
           selected <- select_species(
             priorities,
             threshold = threshold,
@@ -358,8 +389,13 @@ bootstrap_priority <- function(
 
           selected_status <- priorities$plant_species %in%
             selected$plant_species
+
         } else {
-          selected_status <- rep(NA, nrow(priorities))
+
+          selected_status <- rep(
+            NA,
+            nrow(priorities)
+          )
         }
 
         data.frame(
@@ -378,8 +414,11 @@ bootstrap_priority <- function(
     )
 
     if (inherits(attempt, "error")) {
+
       errors[replicate_id] <- conditionMessage(attempt)
+
     } else {
+
       successful[[replicate_id]] <- attempt
     }
   }
@@ -392,15 +431,17 @@ bootstrap_priority <- function(
 
   selection_available <- vapply(
     successful,
-    function(x) {
-      !is.null(x) && !anyNA(x$selected)
+    function(result) {
+      !is.null(result) && !anyNA(result$selected)
     },
     logical(1)
   )
 
   n_metrics <- sum(metrics_available)
   n_successful <- sum(selection_available)
+
   n_calculation_failed <- sum(!metrics_available)
+
   n_selection_undefined <- sum(
     metrics_available & !selection_available
   )
@@ -453,12 +494,20 @@ bootstrap_priority <- function(
       n_present <- nrow(plant_results)
       n_selected <- sum(plant_results$selected)
 
-      ipr_interval <- rank_interval <- c(NA_real_, NA_real_)
+      ipr_interval <- rank_interval <- c(
+        NA_real_,
+        NA_real_
+      )
+
       ipr_mean <- rank_median <- NA_real_
 
       if (n_present > 0L) {
+
         ipr_mean <- mean(plant_results$IPR)
-        rank_median <- stats::median(plant_results$rank)
+
+        rank_median <- stats::median(
+          plant_results$rank
+        )
 
         ipr_interval <- stats::quantile(
           plant_results$IPR,
@@ -478,22 +527,27 @@ bootstrap_priority <- function(
       data.frame(
         plant_species = plant,
         n_present = n_present,
+
         presence_frequency = if (n_successful > 0L) {
           n_present / n_successful
         } else {
           NA_real_
         },
+
         n_selected = n_selected,
+
         selection_frequency = if (n_successful > 0L) {
           n_selected / n_successful
         } else {
           NA_real_
         },
+
         selection_given_presence = if (n_present > 0L) {
           n_selected / n_present
         } else {
           NA_real_
         },
+
         IPR_mean = ipr_mean,
         IPR_lower = ipr_interval[1],
         IPR_upper = ipr_interval[2],
@@ -505,26 +559,37 @@ bootstrap_priority <- function(
     }
   )
 
-  summary_table <- do.call(rbind, summary_rows)
+  summary_table <- do.call(
+    rbind,
+    summary_rows
+  )
+
   rownames(summary_table) <- NULL
 
   failure_table <- data.frame(
     replicate = which(!valid),
+
     type = ifelse(
       metrics_available[!valid],
       "selection_undefined",
       "calculation_failed"
     ),
+
     message = errors[!valid],
     stringsAsFactors = FALSE
   )
 
   if (n_failed > 0L) {
+
     warning(
-      n_calculation_failed, " replicate(s) had calculation errors; ",
+      n_calculation_failed,
+      " replicate(s) had calculation errors; ",
       n_selection_undefined,
       " replicate(s) had undefined selection because total IPR was zero. ",
-      "Selection summaries use ", n_successful, " of ", n_boot,
+      "Selection summaries use ",
+      n_successful,
+      " of ",
+      n_boot,
       " replicates. See `diagnostics$failures`.",
       call. = FALSE
     )
@@ -533,6 +598,12 @@ bootstrap_priority <- function(
   list(
     summary = summary_table,
     replicates = replicates,
+
+    set_size = summarize_bootstrap_set_size(
+      successful,
+      conf
+    ),
+
     diagnostics = list(
       n_requested = n_boot,
       n_successful = n_successful,
@@ -542,6 +613,7 @@ bootstrap_priority <- function(
       n_selection_undefined = n_selection_undefined,
       failures = failure_table
     ),
+
     settings = list(
       n_boot = n_boot,
       resample_unit = resample_unit,

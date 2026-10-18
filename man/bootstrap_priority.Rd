@@ -38,7 +38,8 @@ plants. Must be greater than zero and at most one. Default is 0.80.}
 \code{"first"} or \code{"include"}. Passed to \code{select_species()}.}
 
 \item{conf}{Level used to calculate central empirical intervals
-for IPR scores and ranks. Default is 0.95.}
+for IPR scores, ranks and the number of selected plants.
+Default is 0.95.}
 
 \item{seed}{Optional non-negative integer seed. The previous
 random-number state is restored when the function finishes.}
@@ -51,6 +52,12 @@ summaries of IPR scores and ranks for each plant.
 \item \code{replicates}: scores, ranks and selection status for
 plants in replicates with completed calculations. Selection is
 \code{NA} when total IPR is zero.
+\item \code{set_size}: number of selected plants in each requested
+replicate (\code{replicates}), its frequency distribution
+(\code{frequencies}) and a one-row \code{summary}.
+Failed calculations and undefined selections have \code{NA}
+sizes and are excluded from this summary. Their counts and
+statuses remain available.
 \item \code{diagnostics}: counts of completed calculations,
 defined selections, calculation errors and undefined selections.
 The \code{failures} table identifies excluded replicates and
@@ -97,6 +104,15 @@ In \code{diagnostics}, \code{n_successful} counts replicates with
 defined selection. The count \code{n_failed} includes calculation
 errors and undefined selections, reported separately as
 \code{n_calculation_failed} and \code{n_selection_undefined}.
+
+Set-size summaries use the same replicates with defined selection
+and the interval level supplied in \code{conf}. No additional
+draws are generated. The standard deviation is \code{NA} when
+fewer than two replicates have defined selection.
+
+The number of plants refers to the threshold and tie rule used
+in that bootstrap run. Its percentile bounds describe resampling
+variation, not an ideal number of plants for restoration.
 
 When units without interactions are absent from the input, the
 analysis is restricted to units represented in the data.
