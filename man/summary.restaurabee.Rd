@@ -15,10 +15,18 @@
 The input object, invisibly.
 }
 \description{
-Displays analysis settings, priority scores, selected plants
-and network results.
+Displays analysis settings, priority scores, selected plants,
+network results and ranking diagnostics.
 }
 \details{
 If selection failed, the output reports that selection is unavailable.
 Objects without stored settings are displayed using the original defaults.
+
+When available, ranking diagnostics show cumulative IPR proportions,
+Spearman correlations between components and the changes caused by
+omitting each component.
+
+Cumulative IPR proportions describe the supplied scores. They do not
+represent bee coverage or recommended planting lists. Correlations
+involving constant components are undefined and appear as \code{NA}.
 }

@@ -10,6 +10,8 @@
 #' @details
 #' If selection failed, the output reports that selection is unavailable.
 #' Objects without stored settings are displayed using the original defaults.
+#' When ranking diagnostics are present, the output indicates where to
+#' find them.
 #'
 #' @export
 print.restaurabee <- function(x, ...) {
@@ -168,6 +170,10 @@ print.restaurabee <- function(x, ...) {
     cat("Sensitivity correlations: not available.\n")
   }
 
+  if (!is.null(x$diagnostics)) {
+    cat("Ranking diagnostics: available in result$diagnostics.\n")
+  }
+
   cat("\nDetailed results:\n")
   cat("  result$IIP\n")
   cat("  result$prioritization\n")
@@ -175,6 +181,11 @@ print.restaurabee <- function(x, ...) {
   cat("  result$d_prime\n")
   cat("  result$sensitivity\n")
   cat("  result$network_metrics\n")
+
+  if (!is.null(x$diagnostics)) {
+    cat("  result$diagnostics\n")
+  }
+
   cat("  result$settings\n")
 
   cat("\n")

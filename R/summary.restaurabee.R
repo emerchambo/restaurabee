@@ -1,7 +1,7 @@
 #' Summary method for restaurabee objects
 #'
-#' Displays analysis settings, priority scores, selected plants
-#' and network results.
+#' Displays analysis settings, priority scores, selected plants,
+#' network results and ranking diagnostics.
 #'
 #' @param object An object of class \code{restaurabee}.
 #' @param ... Additional arguments, currently ignored.
@@ -11,6 +11,14 @@
 #' @details
 #' If selection failed, the output reports that selection is unavailable.
 #' Objects without stored settings are displayed using the original defaults.
+#'
+#' When available, ranking diagnostics show cumulative IPR proportions,
+#' Spearman correlations between components and the changes caused by
+#' omitting each component.
+#'
+#' Cumulative IPR proportions describe the supplied scores. They do not
+#' represent bee coverage or recommended planting lists. Correlations
+#' involving constant components are undefined and appear as \code{NA}.
 #'
 #' @export
 summary.restaurabee <- function(object, ...) {
@@ -210,6 +218,108 @@ summary.restaurabee <- function(object, ...) {
 
     cat("Sensitivity results are not available.\n")
   }
+
+  diagnostics <- object$diagnostics
+
+  if (!is.null(diagnostics)) {
+
+    accumulation <- diagnostics$ipr_accumulation
+
+    if (!is.null(accumulation$thresholds)) {
+
+      cat("\nCumulative IPR proportions\n")
+      cat("-----------------------------------------\n")
+
+      print(
+        accumulation$thresholds,
+        row.names = FALSE,
+        digits = 4
+      )
+
+      cat(
+        "Proportions refer to total IPR, not bee coverage.\n"
+      )
+    }
+
+    associations <- diagnostics$component_correlations
+
+    if (!is.null(associations$correlation_matrix)) {
+
+      cat("\nComponent correlations (Spearman)\n")
+      cat("-----------------------------------------\n")
+
+      print(
+        associations$correlation_matrix,
+        digits = 3
+      )
+
+      if (length(associations$constant_components) > 0L) {
+
+        cat(
+          "Constant components: ",
+          paste(
+            associations$constant_components,
+            collapse = ", "
+          ),
+          ".\n",
+          sep = ""
+        )
+
+        cat(
+          "Correlations involving these components are undefined (NA).\n"
+        )
+      }
+
+      if (
+        !is.null(associations$n_plants) &&
+        associations$n_plants < 2L
+      ) {
+        cat(
+          "At least two plants are needed to calculate correlations.\n"
+        )
+      }
+    }
+
+    omission <- diagnostics$component_omission
+
+    if (!is.null(omission$summary)) {
+
+      cat("\nComponent omission\n")
+      cat("-----------------------------------------\n")
+
+      omission_columns <- c(
+        "scenario",
+        "spearman_vs_reference",
+        "mean_absolute_rank_change",
+        "n_selected",
+        "jaccard",
+        "status"
+      )
+
+      print(
+        omission$summary[
+          , omission_columns,
+          drop = FALSE
+        ],
+        row.names = FALSE,
+        digits = 3
+      )
+
+      cat(
+        "Remaining weights are rescaled to sum to one.\n"
+      )
+
+      cat(
+        "Jaccard compares each cumulative set with the reference set.\n"
+      )
+
+      cat(
+        "Full results: result$diagnostics$component_omission\n"
+      )
+    }
+  }
+
+  cat("\n")
 
   invisible(object)
 }

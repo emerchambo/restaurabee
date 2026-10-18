@@ -20,4 +20,6 @@ Displays the dataset size, analysis settings and main results.
 \details{
 If selection failed, the output reports that selection is unavailable.
 Objects without stored settings are displayed using the original defaults.
+When ranking diagnostics are present, the output indicates where to
+find them.
 }
