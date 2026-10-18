@@ -1,7 +1,7 @@
 Package: restaurabee
 Type: Package
 Title: Prioritization of Plant Species for Ecological Restoration Using Plant-Pollinator Interaction Networks
-Version: 0.2.1
+Version: 0.3.0
 Authors@R:
     person(
         given = "Emerson",
