@@ -12,7 +12,8 @@ restaurabee(
   weights = c(abundance = 0.25, specialization = 0.25, connectivity = 0.25, frequency =
     0.25),
   threshold = 0.8,
-  ties = c("first", "include")
+  ties = c("first", "include"),
+  diagnostics = TRUE
 )
 }
 \arguments{
@@ -44,6 +45,9 @@ Default is 0.80.}
 \item{ties}{Treatment of ties at the selection boundary.
 \code{"first"} keeps the first rows needed to reach the threshold.
 \code{"include"} also keeps all plants tied with the last selected plant.}
+
+\item{diagnostics}{Logical. Calculate cumulative IPR, component
+correlations and component omission comparisons. Default is \code{TRUE}.}
 }
 \value{
 An object of class \code{restaurabee} containing:
@@ -54,31 +58,47 @@ An object of class \code{restaurabee} containing:
 \item \code{d_prime}: specialization values for plants and bees.
 \item \code{plant_metrics}: ecological metrics for each plant.
 \item \code{prioritization}: IPR scores and standardized components.
-\item \code{selected_species}: selected plants, or \code{NULL}
-if selection fails.
+\item \code{selected_species}: plants retained at the cumulative
+threshold, or \code{NULL} if selection fails.
 \item \code{sensitivity}: ranking comparisons using the supplied
 weights as the reference.
 \item \code{network_metrics}: requested network descriptors, or
 \code{NULL} if skipped or if their calculation fails.
+\item \code{diagnostics}: results from \code{ipr_accumulation()},
+\code{component_correlations()} and \code{component_omission()},
+or \code{NULL} when disabled.
 \item \code{settings}: weights, threshold, tie handling,
-requested network indices and seed.
+requested network indices, seed and diagnostic option.
 }
 }
 \description{
-Calculates plant priority scores from plant-pollinator interaction
-records, selects plants and compares rankings under different weights.
+Calculates plant priority scores from interaction records and provides
+component metrics, cumulative sets and diagnostic comparisons.
 }
 \details{
-The same weights are used for the IPR and the reference ranking
-in the sensitivity analysis. Changing the threshold or tie handling
-changes selection, not the IPR scores.
+The same weights are used for IPR and the reference rankings in
+sensitivity and component omission analyses.
+Changing the threshold or tie handling changes the cumulative set,
+not the IPR scores.
 
-The selection threshold is a proportion of IPR scores, not a measure
-of pollinator coverage or restoration success.
+The threshold describes a proportion of total IPR, not bee coverage
+or restoration success. Cumulative sets are summaries of the scores,
+not prescribed planting lists.
+
+Diagnostics include cumulative proportions of 70\%, 80\% and 90\%,
+together with the requested threshold. Omission comparisons use
+the requested threshold and retain input order for tied scores.
+Each omission redistributes the remaining weights proportionally.
+
+Use \code{diagnostics = FALSE} to skip the additional diagnostics.
+This does not change IPR scores, selection or sensitivity scenarios.
 
 Some network indices use random simulations. Supply a seed to
 reproduce these calculations in the same software environment.
 Network indices do not affect priority scores or selection.
+
+Coverage and bootstrap analyses are called separately with
+\code{pollinator_coverage()} and \code{bootstrap_priority()}.
 }
 \examples{
 data <- data.frame(
@@ -88,6 +108,10 @@ data <- data.frame(
 )
 
 result <- restaurabee(data)
+
+result$diagnostics$ipr_accumulation$thresholds
+result$diagnostics$component_correlations$correlation_matrix
+result$diagnostics$component_omission$summary
 
 result_custom <- restaurabee(
   data,

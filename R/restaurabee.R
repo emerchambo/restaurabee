@@ -1,7 +1,7 @@
 #' Ecological Restoration Prioritization Using Plant-Pollinator Networks
 #'
-#' Calculates plant priority scores from plant-pollinator interaction
-#' records, selects plants and compares rankings under different weights.
+#' Calculates plant priority scores from interaction records and provides
+#' component metrics, cumulative sets and diagnostic comparisons.
 #'
 #' @param interaction_data A data frame containing:
 #' \describe{
@@ -26,6 +26,8 @@
 #' @param ties Treatment of ties at the selection boundary.
 #' \code{"first"} keeps the first rows needed to reach the threshold.
 #' \code{"include"} also keeps all plants tied with the last selected plant.
+#' @param diagnostics Logical. Calculate cumulative IPR, component
+#' correlations and component omission comparisons. Default is \code{TRUE}.
 #'
 #' @return An object of class \code{restaurabee} containing:
 #' \itemize{
@@ -35,27 +37,43 @@
 #'   \item \code{d_prime}: specialization values for plants and bees.
 #'   \item \code{plant_metrics}: ecological metrics for each plant.
 #'   \item \code{prioritization}: IPR scores and standardized components.
-#'   \item \code{selected_species}: selected plants, or \code{NULL}
-#'   if selection fails.
+#'   \item \code{selected_species}: plants retained at the cumulative
+#'   threshold, or \code{NULL} if selection fails.
 #'   \item \code{sensitivity}: ranking comparisons using the supplied
 #'   weights as the reference.
 #'   \item \code{network_metrics}: requested network descriptors, or
 #'   \code{NULL} if skipped or if their calculation fails.
+#'   \item \code{diagnostics}: results from \code{ipr_accumulation()},
+#'   \code{component_correlations()} and \code{component_omission()},
+#'   or \code{NULL} when disabled.
 #'   \item \code{settings}: weights, threshold, tie handling,
-#'   requested network indices and seed.
+#'   requested network indices, seed and diagnostic option.
 #' }
 #'
 #' @details
-#' The same weights are used for the IPR and the reference ranking
-#' in the sensitivity analysis. Changing the threshold or tie handling
-#' changes selection, not the IPR scores.
+#' The same weights are used for IPR and the reference rankings in
+#' sensitivity and component omission analyses.
+#' Changing the threshold or tie handling changes the cumulative set,
+#' not the IPR scores.
 #'
-#' The selection threshold is a proportion of IPR scores, not a measure
-#' of pollinator coverage or restoration success.
+#' The threshold describes a proportion of total IPR, not bee coverage
+#' or restoration success. Cumulative sets are summaries of the scores,
+#' not prescribed planting lists.
+#'
+#' Diagnostics include cumulative proportions of 70%, 80% and 90%,
+#' together with the requested threshold. Omission comparisons use
+#' the requested threshold and retain input order for tied scores.
+#' Each omission redistributes the remaining weights proportionally.
+#'
+#' Use \code{diagnostics = FALSE} to skip the additional diagnostics.
+#' This does not change IPR scores, selection or sensitivity scenarios.
 #'
 #' Some network indices use random simulations. Supply a seed to
 #' reproduce these calculations in the same software environment.
 #' Network indices do not affect priority scores or selection.
+#'
+#' Coverage and bootstrap analyses are called separately with
+#' \code{pollinator_coverage()} and \code{bootstrap_priority()}.
 #'
 #' @examples
 #' data <- data.frame(
@@ -65,6 +83,10 @@
 #' )
 #'
 #' result <- restaurabee(data)
+#'
+#' result$diagnostics$ipr_accumulation$thresholds
+#' result$diagnostics$component_correlations$correlation_matrix
+#' result$diagnostics$component_omission$summary
 #'
 #' result_custom <- restaurabee(
 #'   data,
@@ -97,8 +119,21 @@ restaurabee <- function(
       frequency = 0.25
     ),
     threshold = 0.80,
-    ties = c("first", "include")
+    ties = c("first", "include"),
+    diagnostics = TRUE
 ) {
+
+  if (
+    !is.logical(diagnostics) ||
+    length(diagnostics) != 1L ||
+    !is.null(dim(diagnostics)) ||
+    is.na(diagnostics)
+  ) {
+    stop(
+      "`diagnostics` must be TRUE or FALSE.",
+      call. = FALSE
+    )
+  }
 
   weights <- validate_ipr_weights(weights)
   ties <- match.arg(ties)
@@ -175,7 +210,9 @@ restaurabee <- function(
     sampling_units = length(unique(interaction_data$sample_unit))
   )
 
-  interaction_matrix <- build_interaction_matrix(interaction_data)
+  interaction_matrix <- build_interaction_matrix(
+    interaction_data
+  )
 
   IIP <- calculate_IIP(interaction_data)
 
@@ -195,11 +232,39 @@ restaurabee <- function(
     weight_frequency = weights[["frequency"]]
   )
 
+  diagnostic_results <- NULL
+
+  if (diagnostics) {
+
+    diagnostic_results <- list(
+      ipr_accumulation = ipr_accumulation(
+        prioritization,
+        thresholds = sort(
+          unique(c(0.70, 0.80, 0.90, threshold))
+        ),
+        ties = ties
+      ),
+
+      component_correlations = component_correlations(
+        prioritization
+      ),
+
+      component_omission = component_omission(
+        prioritization,
+        weights = weights,
+        threshold = threshold,
+        ties = ties,
+        tie_break = "input"
+      )
+    )
+  }
+
   sensitivity <- tryCatch(
     sensitivity_analysis(
       prioritization,
       weights = weights
     ),
+
     error = function(e) {
 
       warning(
@@ -223,7 +288,10 @@ restaurabee <- function(
         NA_real_,
         nrow = 5,
         ncol = 5,
-        dimnames = list(scenario_names, scenario_names)
+        dimnames = list(
+          scenario_names,
+          scenario_names
+        )
       )
 
       list(
@@ -240,6 +308,7 @@ restaurabee <- function(
       threshold = threshold,
       ties = ties
     ),
+
     error = function(e) {
 
       warning(
@@ -288,7 +357,10 @@ restaurabee <- function(
               envir = globalenv(),
               inherits = FALSE
             )) {
-              rm(".Random.seed", envir = globalenv())
+              rm(
+                ".Random.seed",
+                envir = globalenv()
+              )
             }
           },
           add = TRUE
@@ -310,6 +382,7 @@ restaurabee <- function(
 
     network_metrics <- tryCatch(
       calculate_network_metrics(),
+
       error = function(e) {
 
         warning(
@@ -333,12 +406,15 @@ restaurabee <- function(
     selected_species = selected_species,
     sensitivity = sensitivity,
     network_metrics = network_metrics,
+    diagnostics = diagnostic_results,
+
     settings = list(
       weights = weights,
       threshold = threshold,
       ties = ties,
       network_indices = network_indices,
-      seed = seed
+      seed = seed,
+      diagnostics = diagnostics
     )
   )
 
