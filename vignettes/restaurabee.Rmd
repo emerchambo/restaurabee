@@ -20,17 +20,21 @@ library(restaurabee)
 
 # Introduction
 
-**restaurabee** is an R package for prioritizing plant species for ecological
-restoration using plant–pollinator interaction networks.
+**restaurabee** is an R package for ranking plant species using
+plant–pollinator interaction records to inform ecological restoration.
 
-The package calculates ecological importance, species specialization,
-restoration priority scores, selected species, sensitivity analyses and
-network-level descriptors. Additional functions calculate the coverage of
-recorded bee partners and evaluate selection stability by bootstrap resampling.
+The package calculates the Interaction Importance Index (IIP), species
+specialization, the Interaction-based Restoration Priority Index (IPR),
+cumulative sets, sensitivity analyses and network descriptors.
 
-The results are intended to support restoration planning. They should be
-considered alongside ecological feasibility, species origin, establishment
-requirements and other restoration criteria.
+Ranking diagnostics describe cumulative IPR proportions, associations between
+components and changes after omitting each component. Additional functions
+calculate recorded bee coverage and evaluate stability under bootstrap
+resampling.
+
+The results support restoration planning. They should be considered alongside
+ecological feasibility, species origin, establishment requirements and other
+restoration criteria.
 
 # Input data
 
@@ -145,11 +149,19 @@ result <- restaurabee(interaction_data)
 ```
 
 The output contains metadata, the interaction matrix, ecological metrics,
-prioritization, species selection, sensitivity analysis, network metrics
-and the analysis settings:
+prioritization, species selection, sensitivity analysis, network metrics,
+ranking diagnostics and analysis settings:
 
 ```{r output-names}
 names(result)
+```
+
+`print()` provides a brief overview. `summary()` also displays the ranking
+diagnostics when available:
+
+```{r display-results, eval = FALSE}
+print(result)
+summary(result)
 ```
 
 # Dataset metadata
@@ -199,7 +211,8 @@ Repeated observations contribute to visits. Each sampling unit and each bee
 partner are counted once per plant for occurrences and partners, respectively.
 
 Occurrence here refers to recorded interactions. It does not measure plant
-presence in units where no interaction was recorded.
+presence in units where no interaction was recorded. Interaction abundance
+does not measure plant abundance or floral availability.
 
 # Species specialization
 
@@ -214,6 +227,10 @@ result$d_prime$bee_dprime
 
 Interpretation depends on interaction frequencies and partner availability
 represented in the observed network.
+
+Plants with few records or records restricted to few sampling units require
+particular care. A high plant specialization value alone does not establish
+its importance for specialist bees or its contribution to restoration success.
 
 # Restoration prioritization
 
@@ -231,8 +248,10 @@ increases IPR when the other components are held constant.
 result$prioritization
 ```
 
-The IPR is a relative score, not an absolute measure of restoration success.
-Rare or infrequently recorded plants may receive high priority when their
+The output retains all plants and their component values. The IPR is a relative
+score, not an absolute measure of restoration success.
+
+Rare or infrequently recorded plants may receive high scores when their
 specialization values are high. Examine this result in the ecological and
 sampling context of the study.
 
@@ -259,13 +278,17 @@ custom_result <- restaurabee(
 custom_result$settings
 ```
 
-Weights express the relative contribution of the four components.
+Weights express the relative contribution assigned to each component.
 Choose them according to the objectives of the analysis and report them
 alongside the results.
 
-# Selecting priority species
+Equal weights provide a reference configuration. They do not ensure
+independent or balanced contributions from ecological dimensions when
+components are correlated.
 
-Plants are ordered by decreasing IPR and selected until their cumulative
+# Cumulative IPR and retained plants
+
+Plants are ordered by decreasing IPR and retained until their cumulative
 contribution reaches the specified threshold.
 
 The default threshold is 0.80:
@@ -273,6 +296,9 @@ The default threshold is 0.80:
 ```{r selected-species}
 result$selected_species
 ```
+
+This set describes the distribution of scores. It is not a recommendation
+to plant only the retained species.
 
 With `ties = "first"`, the default, selection stops at the first plant that
 reaches the threshold. With `ties = "include"`, all plants with exactly the
@@ -283,14 +309,165 @@ custom_result$selected_species
 ```
 
 A threshold of one retains all plants with positive IPR. Plants with zero IPR
-do not contribute to the cumulative total.
+do not contribute to the cumulative total, but remain in the prioritization
+table.
 
 The threshold refers to the proportion of total IPR, not the proportion of
 bee species represented. If total IPR is zero, this selection rule is
 undefined. In the main workflow, a selection error produces a warning and
 `selected_species = NULL`.
 
-# Sensitivity analysis
+## Complete cumulative curve
+
+`ipr_accumulation()` returns the complete cumulative curve and the number
+of plants needed to reach requested proportions.
+
+The main workflow stores this diagnostic in:
+
+```{r accumulation-curve}
+result$diagnostics$ipr_accumulation$curve
+```
+
+The curve contains all plants, including those with zero IPR, together with:
+
+- `k`: position in the decreasing IPR order;
+- `relative_IPR`: the plant's IPR divided by total IPR;
+- `cumulative_IPR`: cumulative proportion of total IPR.
+
+The default diagnostic examines 70%, 80% and 90%, together with the threshold
+supplied to `restaurabee()`:
+
+```{r accumulation-thresholds}
+result$diagnostics$ipr_accumulation$thresholds
+```
+
+The threshold table reports the requested proportion, number of plants,
+achieved proportion, boundary score, status and any explanatory message.
+The achieved proportion can exceed the requested threshold because plants
+are retained as whole rows.
+
+Use the function separately for other thresholds:
+
+```{r other-thresholds}
+accumulation <- ipr_accumulation(
+  result$prioritization,
+  thresholds = c(0.60, 0.75, 0.95),
+  ties = result$settings$ties
+)
+
+accumulation$thresholds
+```
+
+Equal scores retain their input order. When total IPR is zero, the curve
+is retained, proportions and threshold sizes are `NA`, and the status is
+`zero_total`.
+
+# Associations between IPR components
+
+`component_correlations()` calculates Spearman correlations between the four
+standardized components across plants.
+
+The main workflow stores the correlation matrix and a table of component
+pairs:
+
+```{r component-correlations}
+associations <- result$diagnostics$component_correlations
+
+associations$correlation_matrix
+associations$pairwise
+```
+
+Positive correlations indicate similar ordering of plants by the components.
+Correlated components can reinforce the same pattern in the data, even when
+their nominal weights are equal.
+
+The diagnostic also identifies constant components:
+
+```{r constant-components}
+associations$constant_components
+associations$n_plants
+```
+
+Correlations involving a constant component are undefined and returned as
+`NA`, including its diagonal entry. At least two plants and variation in
+both components are needed to calculate a correlation.
+
+This diagnostic does not remove components, change weights or apply an
+automatic correlation cutoff.
+
+It can also be run separately:
+
+```{r standalone-correlations, eval = FALSE}
+associations <- component_correlations(result$prioritization)
+```
+
+# Component omission
+
+`component_omission()` examines changes after removing each component
+in turn. The remaining weights are rescaled to sum to one.
+
+The reference scenario uses the weights supplied to `restaurabee()`:
+
+```{r omission-weights}
+omission <- result$diagnostics$component_omission
+
+omission$scenario_weights
+```
+
+A compact comparison can be displayed with:
+
+```{r omission-summary}
+omission$summary[, c(
+  "scenario",
+  "spearman_vs_reference",
+  "kendall_vs_reference",
+  "mean_absolute_rank_change",
+  "n_selected",
+  "jaccard",
+  "status"
+)]
+```
+
+The full summary also reports maximum rank changes, the number of shared
+plants, and plants added to or removed from the cumulative set:
+
+```{r omission-full-summary}
+omission$summary
+```
+
+Spearman and Kendall correlations compare rankings with the reference.
+Rank changes describe shifts in position. Jaccard similarity compares the
+retained sets as the number of shared plants divided by the number in
+their union.
+
+Omission combines removal of one contribution with redistribution of the
+remaining weights. It does not isolate the removed component while holding
+all other weights fixed.
+
+High rank correlations do not guarantee identical sets at a cumulative
+threshold. Conversely, the same retained set can occur despite changes
+in ranking.
+
+If removing a component leaves no positive weight, the scenario is reported
+as `no_remaining_weight`. A zero total score is reported as `zero_total`.
+Inspect status and message columns before interpreting undefined results.
+
+For a separate analysis, supply the intended settings explicitly:
+
+```{r standalone-omission, eval = FALSE}
+omission <- component_omission(
+  result$prioritization,
+  weights = result$settings$weights,
+  threshold = result$settings$threshold,
+  ties = result$settings$ties,
+  tie_break = "input"
+)
+```
+
+The main workflow uses input order to resolve equal scores when a boundary
+tie must be broken.
+
+# Sensitivity to alternative weights
 
 Sensitivity analysis compares rankings under the supplied baseline weights
 and four alternatives that emphasize one component at a time:
@@ -321,6 +498,30 @@ They do not guarantee identical selections at a cumulative threshold.
 A scenario with constant ranks has undefined correlations, returned as `NA`
 with a warning. This analysis evaluates changes in weights, rather than
 sampling uncertainty.
+
+Component omission and alternative weighting scenarios answer related but
+different questions: the former removes a component, whereas the latter
+increases its contribution.
+
+# Skipping ranking diagnostics
+
+Cumulative IPR, component correlations and component omission are calculated
+by default. They can be skipped:
+
+```{r skip-diagnostics}
+result_without_diagnostics <- restaurabee(
+  interaction_data,
+  diagnostics = FALSE
+)
+
+is.null(result_without_diagnostics$diagnostics)
+```
+
+Disabling these diagnostics does not change IIP, d', IPR, the cumulative set,
+sensitivity analysis or network metrics.
+
+The individual diagnostic functions remain available for separate use.
+Bee coverage and bootstrap analyses are always called separately.
 
 # Network-level metrics
 
@@ -365,10 +566,10 @@ Some descriptors may be undefined or unstable for small, sparse or
 disconnected networks. Examine warnings and values in relation to network
 size, sampling effort and data structure.
 
-# Bee coverage of selected plants
+# Bee coverage of a plant set
 
 `pollinator_coverage()` calculates the proportion of recorded bee species
-that interact with at least one selected plant:
+that interact with at least one plant in the supplied set:
 
 ```{r bee-coverage}
 if (!is.null(result$selected_species)) {
@@ -384,18 +585,18 @@ if (!is.null(result$selected_species)) {
 The output reports:
 
 - `coverage`: proportion of recorded bee species represented;
-- `n_plants`: number of distinct selected plants;
+- `n_plants`: number of distinct plants in the supplied set;
 - `n_bees_total`: number of bee species recorded in the matrix;
-- `n_bees_covered`: number represented by the selected plants;
+- `n_bees_covered`: number represented by the supplied plants;
 - `covered`: identifiers of represented bees;
 - `not_covered`: identifiers of the remaining recorded bees.
 
-A bee is counted once regardless of its number of interactions or selected
-plant partners. Columns containing only zeros are excluded from the total.
+A bee is counted once regardless of its number of interactions or plant
+partners in the set. Columns containing only zeros are excluded from the total.
 An empty plant selection has zero coverage.
 
 An IPR threshold of 80% does not imply 80% bee coverage. These quantities
-describe different aspects of the selection.
+describe different aspects of the plant set.
 
 Coverage is restricted to recorded partners. It does not estimate sampling
 completeness, pollination effectiveness or the persistence of bee populations
@@ -406,9 +607,9 @@ after restoration.
 `bootstrap_priority()` evaluates how prioritization changes when sampling
 units are resampled with replacement. It runs separately from `restaurabee()`.
 
-Each replicate draws the same number of units as the original dataset.
-All records from a drawn unit remain together. Repeated draws receive new
-sampling-unit identifiers so that occurrence counts distinguish the copies.
+Each replicate draws the same number of resampling units as the original
+dataset. All records from a drawn unit remain together. Repeated draws receive
+new sampling-unit identifiers so that occurrence counts distinguish the copies.
 
 Each replicate recalculates IIP, d', IPR and plant selection.
 
@@ -485,12 +686,12 @@ The `failures` table identifies excluded replicates and explains the reason.
 
 When total IPR is zero, proportional contributions cannot be calculated.
 Scores and ranks remain in `replicates`, but selection is recorded as `NA`.
-These replicates are excluded from all summary calculations.
+These replicates are excluded from the plant summaries and set-size statistics.
 
-If no replicate allows selection, summary frequencies and intervals are `NA`.
-If all metric calculations fail, the function stops.
+If no replicate allows selection, plant summary frequencies and intervals
+are `NA`. If all metric calculations fail, the function stops.
 
-## Reading the summaries
+## Reading the plant summaries
 
 ```{r bootstrap-summary}
 bootstrap_result$summary
@@ -523,6 +724,38 @@ High selection frequency indicates that a plant was often selected under
 the specified resampling procedure and settings. It is not a probability of
 restoration success.
 
+## Number of retained plants
+
+The number of plants needed to reach the threshold can change among
+replicates. The `set_size` output summarizes this variation without
+performing additional resampling:
+
+```{r bootstrap-set-size}
+bootstrap_result$set_size$summary
+bootstrap_result$set_size$frequencies
+```
+
+The summary reports:
+
+- `n_requested`: number of requested replicates;
+- `n_defined`: replicates with a defined cumulative set;
+- `n_excluded`: replicates excluded from the size statistics;
+- `k_mean` and `k_sd`: mean and standard deviation of set size;
+- `k_median`: median set size;
+- `k_min` and `k_max`: smallest and largest set sizes;
+- `k_lower` and `k_upper`: percentile limits determined by `conf`.
+
+The frequency table reports each observed set size, its count and its
+frequency among replicates with defined selection.
+
+Calculation failures and undefined selections are excluded from these
+statistics. They are counted in `n_excluded` and documented in the bootstrap
+diagnostics. If no set size is defined, the size statistics are `NA`.
+The standard deviation is also `NA` when fewer than two sizes are available.
+
+Percentile limits describe the resampled distribution of set size. They
+are not a recommended minimum or maximum number of plants for restoration.
+
 ## Bootstrap limitations
 
 Results depend on the choice of resampling unit and on the units represented
@@ -549,10 +782,22 @@ on:
 
 The functions answer different questions:
 
-- IPR ranks plants using the chosen ecological components and weights.
-- Sensitivity analysis compares rankings under changes in weights.
-- Coverage describes the recorded bee partners represented by selected plants.
-- Bootstrap analysis describes variation under resampling of the chosen units.
+- IPR ranks plants using the chosen components and weights.
+- Cumulative IPR describes how scores are distributed among plants.
+- Component correlations describe associations between components.
+- Component omission examines changes after removing and redistributing weights.
+- Sensitivity analysis compares rankings under alternative weights.
+- Coverage describes the recorded bee partners represented by a plant set.
+- Bootstrap analysis describes variation under resampling of the chosen units,
+  including variation in the number of retained plants.
+
+Correlated components can reinforce a shared pattern in the data. Changing
+weights or omitting components helps examine this dependence, but does not
+establish which weighting scheme is ecologically best.
+
+A stable ranking does not demonstrate restoration effectiveness. Likewise,
+complete recorded bee coverage does not establish that a plant set supplies
+all resources required by those bees.
 
 The package supports restoration decisions. It does not replace ecological
 knowledge, field validation, assessments of restoration feasibility or
